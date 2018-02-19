@@ -8,8 +8,11 @@
 #include<grpc++/grpc++.h>
 #include "protos/src/rpc.pb.h"
 #include "protos/src/rpc.grpc.pb.h"
+#include "protos/src/v3lock.pb.h"
+#include "protos/src/v3lock.grpc.pb.h"
 
 using namespace etcdserverpb;
+using namespace v3lockpb;
 using namespace mvccpb;
 
 namespace etcd {
@@ -19,7 +22,6 @@ namespace etcd {
         EtcdClient(std::shared_ptr<grpc::ChannelInterface> channel);
 
         std::unique_ptr<PutResponse> Put(
-            grpc::Status &status,
             std::string key,
             std::string value,
             // TODO: move default params to etcd.cc so that includer sees the default
@@ -29,32 +31,41 @@ namespace etcd {
             bool ignore_lease = false
         );
 
-        std::unique_ptr<PutResponse> Put(
-                std::string key,
-                std::string value,
-                int64_t lease = 0,
-                bool prev_key = false,
-                bool ignore_value = false,
-                bool ignore_lease = false
-        );
-
-        std::unique_ptr<RangeResponse> Range(
-                grpc::Status &status,
-                const std::string &key,
-                const std::string &range_end,
-                const int64_t revision = -1
-        );
-
         std::unique_ptr<RangeResponse> Range(
             const std::string &key,
             const std::string &range_end,
-            const int64_t revision = -1
+            int64_t revision = -1
+        );
+
+        std::unique_ptr<LeaseGrantResponse> LeaseGrant(
+            int64_t requested_ttl,
+            int64_t requested_id = 0
+        );
+
+        std::unique_ptr<LeaseKeepAliveResponse> LeaseKeepAlive(
+            int64_t id
+        );
+
+        std::unique_ptr<LockResponse> Lock(
+            std::string name,
+            int64_t lease_id
+        );
+
+        std::unique_ptr<TxnResponse> Transaction(
+            std::vector<Compare>& comparisons,
+            std::vector<RequestOp>& success_ops,
+            std::vector<RequestOp>& failure_ops
+        );
+
+        std::unique_ptr<Compare> CompareKeyExists(
+            const std::string &key
         );
 
     private:
         std::unique_ptr<KV::Stub> kv_stub_;
         std::unique_ptr<Watch::Stub> watch_stub_;
         std::unique_ptr<Lease::Stub> lease_stub_;
+        std::unique_ptr<Lock::Stub> lock_stub_;
     };
 }
 

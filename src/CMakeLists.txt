@@ -35,9 +35,23 @@ else()
 endif()
 
 # Protobufs types.
-file(GLOB PB_SOURCES "${CMAKE_SOURCE_DIR}/protos/src/*" rpc.*)
+# file(GLOB PB_SOURCES "${CMAKE_SOURCE_DIR}/protos/src/*" rpc.*)
+set(PROTO_SRC_DIR "${CMAKE_SOURCE_DIR}/protos/src")
+set(PB_SOURCES
+    "${PROTO_SRC_DIR}/auth.grpc.pb.cc"
+    "${PROTO_SRC_DIR}/auth.pb.cc"
+    "${PROTO_SRC_DIR}/kv.grpc.pb.cc"
+    "${PROTO_SRC_DIR}/kv.pb.cc"
+    "${PROTO_SRC_DIR}/rpc.grpc.pb.cc"
+    "${PROTO_SRC_DIR}/rpc.pb.cc"
+)
+set_source_files_properties(
+  ${PB_SOURCES}
+    PROPERTIES
+    COMPILE_FLAGS "-w"
+)
 add_library(pb_types STATIC ${PB_SOURCES})
-set_target_properties(pb_types PROPERTIES COMPILE_FLAGS "-w")
+# For files
 
 # timer
 add_library(timer STATIC timer.cc)
@@ -55,7 +69,7 @@ target_link_libraries(etcd ${Protobuf_LIBRARIES})
 target_link_libraries(etcd pb_types)
 
 # master_client
-add_library(master_client STATIC master_client.cc etcd/etcd.cc)
+add_library(master_client STATIC master_client.cc)
 target_compile_options(master_client PUBLIC ${REDIS_MODULE_CFLAGS} -fPIC)
 target_link_libraries(master_client ${LevelDB_LIBRARIES})
 target_link_libraries(master_client glog::glog)

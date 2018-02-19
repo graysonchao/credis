@@ -10,6 +10,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <grpc++/grpc++.h>
+
 extern "C" {
 #include "hiredis/adapters/ae.h"
 #include "hiredis/async.h"
@@ -799,6 +801,8 @@ int TailCheckpoint_RedisCommand(RedisModuleCtx* ctx,
                                    sn_latest + 1);
   HandleNonOk(ctx, s);
 
+  LOG(INFO) << "sn_latest: " << sn_latest;
+  LOG(INFO) << "sn_ckpt: " << sn_ckpt;
   const int64_t num_checkpointed = sn_latest - sn_ckpt + 1;
   return RedisModule_ReplyWithLongLong(ctx, num_checkpointed);
 }

@@ -95,7 +95,7 @@ class CheckpointFlush(unittest.TestCase):
         # 1 entry checkpointed.
         self.assertEqual(1, self.ack_client.execute_command('TAIL.CHECKPOINT'))
 
-        # 0 entry checkpointed.
+        # 0 entries checkpointed.
         self.assertEqual(0, self.ack_client.execute_command('TAIL.CHECKPOINT'))
 
         self.head_client.execute_command('MEMBER.PUT', 'k1', 'v2', _CLIENT_ID)

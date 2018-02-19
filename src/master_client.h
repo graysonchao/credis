@@ -15,6 +15,7 @@ extern "C" {
 }
 
 #include "leveldb/db.h"
+#include "etcd/etcd.h"
 
 using Status = leveldb::Status;
 
@@ -24,6 +25,8 @@ class MasterClient {
     kSnCkpt = 0,
     kSnFlushed = 1,
   };
+
+  const std::string key_prefix_ = "credis/";
 
   Status Connect(const std::string& address, int port);
 
@@ -50,9 +53,9 @@ class MasterClient {
   Status SetWatermark(Watermark w, int64_t new_val);
 
  private:
-  const char* WatermarkKey(Watermark w) const;
+  const std::string WatermarkKey(Watermark w) const;
 
-  std::unique_ptr<redisContext> redis_context_;
+  std::shared_ptr<etcd::EtcdClient> etcd_client_;
 
   static constexpr int64_t kSnCkptInit = 0;
   static constexpr int64_t kSnFlushedInit = 0;

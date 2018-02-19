@@ -15,6 +15,7 @@ extern "C" {
 #include "glog/logging.h"
 #include "leveldb/db.h"
 
+#include <grpc++/grpc++.h>
 #include "utils.h"
 
 struct Member {
@@ -66,7 +67,6 @@ Status SetRole(redisContext* context,
       LOG(INFO) << "error string: " << std::string(context->errstr);
       return Status::IOError(context->errstr);
     }
-
     LOG(INFO) << "Last sequence number is " << reply->integer;
     *sn_result = reply->integer;
     freeReplyObject(reply);
