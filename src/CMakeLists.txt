@@ -5,12 +5,21 @@ include_directories(${CMAKE_SOURCE_DIR}/redis/deps/)
 find_package(glog 0.3.5 REQUIRED)
 find_package(LevelDB REQUIRED)
 find_package(Tcmalloc)
+find_package(Protobuf)
+find_package(GRPC)
+
+include_directories(${Protobuf_INCLUDE_DIRS})
+include_directories(${GRPC_INCLUDE_DIR})
 include_directories(${LevelDB_INCLUDES})
 
 # For redis, build with either of
 #   make MALLOC=tcmalloc
 # or
 #   make MALLOC=jemalloc
+
+# GRPC and Protocol Buffers libraries location
+list(APPEND CMAKE_PREFIX_PATH ${GRPC_INCLUDE_DIR} ${Protobuf_INCLUDE_DIRS})
+
 if (Tcmalloc_FOUND)
   set(MALLOC_LIBRARY "${Tcmalloc_LIBRARY}")
 else()
@@ -25,6 +34,11 @@ else()
   set(REDIS_MODULE_LDFLAGS -shared)
 endif()
 
+# Protobufs types.
+file(GLOB PB_SOURCES "${CMAKE_SOURCE_DIR}/protos/src/*" rpc.*)
+add_library(pb_types STATIC ${PB_SOURCES})
+set_target_properties(pb_types PROPERTIES COMPILE_FLAGS "-w")
+
 # timer
 add_library(timer STATIC timer.cc)
 target_compile_options(timer PUBLIC ${REDIS_MODULE_CFLAGS} -fPIC)
@@ -34,11 +48,19 @@ target_link_libraries(timer glog::glog)
 add_library(utils STATIC utils.cc)
 target_compile_options(utils PUBLIC ${REDIS_MODULE_CFLAGS} -fPIC)
 
+add_library(etcd STATIC etcd/etcd.cc)
+target_link_libraries(etcd gRPC::grpc)
+target_link_libraries(etcd gRPC::grpc++)
+target_link_libraries(etcd ${Protobuf_LIBRARIES})
+target_link_libraries(etcd pb_types)
+
 # master_client
-add_library(master_client STATIC master_client.cc)
+add_library(master_client STATIC master_client.cc etcd/etcd.cc)
 target_compile_options(master_client PUBLIC ${REDIS_MODULE_CFLAGS} -fPIC)
 target_link_libraries(master_client ${LevelDB_LIBRARIES})
 target_link_libraries(master_client glog::glog)
+target_link_libraries(master_client etcd)
+# CPPFLAGS += `pkg-config --cflags protobuf grpc`
 
 # client
 add_library(client STATIC client.cc)
@@ -47,7 +69,7 @@ target_link_libraries(client ${LevelDB_LIBRARIES})
 target_link_libraries(client glog::glog)
 
 # master
-add_library(master SHARED master.cc)
+add_library(master MODULE master.cc)
 target_compile_options(master PUBLIC ${REDIS_MODULE_CFLAGS} -fPIC)
 target_link_libraries(master ${REDIS_MODULE_LDFLAGS})
 target_link_libraries(master utils)
@@ -55,7 +77,7 @@ target_link_libraries(master glog::glog)
 target_link_libraries(master ${LevelDB_LIBRARIES})
 
 # member
-add_library(member SHARED member.cc)
+add_library(member MODULE member.cc)
 target_compile_options(member PUBLIC ${REDIS_MODULE_CFLAGS} -fPIC)
 target_link_libraries(member ${REDIS_MODULE_LDFLAGS})
 target_link_libraries(member utils)

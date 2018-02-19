@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.4)
+add_compile_options(-std=c++11)
 
 project(credis)
 

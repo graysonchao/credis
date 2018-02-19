@@ -13,9 +13,25 @@ pushd redis && env USE_TCMALLOC=yes make -j && popd
 pushd glog && cmake . && make -j install && popd
 pushd leveldb && make -j && popd
 
+# Generate protobufs source files for etcd.
+# You must have grpc, protobufs, and protobuf-c installed.
+# https://github.com/grpc/grpc/blob/master/INSTALL.md
+# https://github.com/google/protobuf/blob/master/src/README.md
+# https://github.com/protobuf-c/protobuf-c/blob/master/README.md
+# protobuf-c is to support building pure-C Protobufs symbols for Redis modules.
+pushd protos && make && popd
+
 mkdir build; cd build
 cmake ..
 make -j
+```
+
+## Setting up etcd
+Use the Procfile script. It starts up 3 nodes and a JSON GRPC proxy, which the
+master uses to communicate with etcd.
+```
+go get github.com/mattn/goreman
+goreman start
 ```
 
 ## Trying it out

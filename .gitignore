@@ -50,3 +50,6 @@ build/
 
 # IDE configs
 .idea
+
+# Compiled (from .proto to .cc/.h) protobufs sources
+protos/src
