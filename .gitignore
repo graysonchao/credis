@@ -39,3 +39,14 @@ __pycache__
 *.log
 callgrind.out.*
 *.sw*
+cmake-build-debug/
+
+# Build dir
+build/
+
+# Python bytecode
+.pytest_cache
+*.pyc
+
+# IDE configs
+.idea
