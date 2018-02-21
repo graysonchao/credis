@@ -168,8 +168,8 @@ class RedisChainModule {
     }
   }
 
-  Status ConnectToMaster(const std::string& address, int port) {
-    return master_client_.Connect(address, port);
+  Status ConnectToMaster(const std::string& address, int port, const std::string& chain_id) {
+    return master_client_.Connect(address, port, chain_id);
   }
   MasterClient& Master() { return master_client_; }
 
@@ -545,14 +545,16 @@ int MemberSetRole_RedisCommand(RedisModuleCtx* ctx,
 int MemberConnectToMaster_RedisCommand(RedisModuleCtx* ctx,
                                        RedisModuleString** argv,
                                        int argc) {
-  if (argc != 3) {
+  if (argc != 4) {
     return RedisModule_WrongArity(ctx);
   }
-  size_t size = 0;
-  const char* ptr = RedisModule_StringPtrLen(argv[1], &size);
+  size_t addr_size = 0;
+  const char* addr_ptr = RedisModule_StringPtrLen(argv[1], &addr_size);
   long long port = 0;
   RedisModule_StringToLongLong(argv[2], &port);
-  Status s = module.ConnectToMaster(std::string(ptr, size), port);
+  size_t chain_size = 0;
+  const char* chain_ptr = RedisModule_StringPtrLen(argv[3], &chain_size);
+  Status s = module.ConnectToMaster(std::string(addr_ptr, addr_size), port, std::string(chain_ptr, chain_size));
   if (!s.ok()) return RedisModule_ReplyWithError(ctx, s.ToString().data());
   return RedisModule_ReplyWithSimpleString(ctx, "OK");
 }
@@ -801,8 +803,6 @@ int TailCheckpoint_RedisCommand(RedisModuleCtx* ctx,
                                    sn_latest + 1);
   HandleNonOk(ctx, s);
 
-  LOG(INFO) << "sn_latest: " << sn_latest;
-  LOG(INFO) << "sn_ckpt: " << sn_ckpt;
   const int64_t num_checkpointed = sn_latest - sn_ckpt + 1;
   return RedisModule_ReplyWithLongLong(ctx, num_checkpointed);
 }

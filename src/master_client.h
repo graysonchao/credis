@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <string>
+#include <thread>
 
 extern "C" {
 #include "hiredis/hiredis.h"
@@ -26,9 +27,19 @@ class MasterClient {
     kSnFlushed = 1,
   };
 
-  const std::string key_prefix_ = "credis/";
 
-  Status Connect(const std::string& address, int port);
+  /**
+   * Connect to the master, and join the specified chain.
+   * @param address
+   * @param port
+   * @param chain_id
+   * @return
+   */
+  Status Connect(
+      const std::string& address,
+      const int port,
+      const std::string& chain_id = "foobar"
+  );
 
   // TODO(zongheng): impl.
   // Retries the current head and tail nodes (for writes and reads,
@@ -53,12 +64,27 @@ class MasterClient {
   Status SetWatermark(Watermark w, int64_t new_val);
 
  private:
-  const std::string WatermarkKey(Watermark w) const;
-
-  std::shared_ptr<etcd::EtcdClient> etcd_client_;
+  const std::string WatermarkKey(std::string chain_id, Watermark w) const;
+  const std::string LastIDKey(std::string chain_id) const;
+  const std::string ConnInfoKey(std::string chain_id) const;
+  const std::string JoinLock(std::string chain_id) const;
+  void StartHeartbeat(std::shared_ptr<grpc::Channel> channel);
+  void AcquireID(std::string chain_id);
+  void RegisterAsMember(std::string chain_id);
 
   static constexpr int64_t kSnCkptInit = 0;
   static constexpr int64_t kSnFlushedInit = 0;
+  static constexpr int64_t kUnsetMemberID = -1;
+  const std::string kKeyPrefix = "credis/";
+  const int kHeartbeatIntervalSec = 5;
+  const int kHeartbeatTimeoutSec = 20;
+
+  std::unique_ptr<etcd::EtcdClient> etcd_client_;
+  std::thread heartbeat_thread_;
+  std::string chain_id_;
+  int64_t heartbeat_lease_id_;
+  int64_t member_id_ = kUnsetMemberID;
+
 };
 
 #endif  // CREDIS_MASTER_CLIENT_H_

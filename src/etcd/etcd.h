@@ -54,18 +54,18 @@ namespace etcd {
         );
 
         std::unique_ptr<LockResponse> Lock(
-            std::string name,
+            std::string lock_name,
             int64_t lease_id
+        );
+
+        std::unique_ptr<UnlockResponse> Unlock(
+            std::string lock_key
         );
 
         std::unique_ptr<TxnResponse> Transaction(
             std::vector<Compare>& comparisons,
             std::vector<RequestOp>& success_ops,
             std::vector<RequestOp>& failure_ops
-        );
-
-        std::unique_ptr<Compare> CompareKeyExists(
-            const std::string &key
         );
 
     private:
@@ -75,6 +75,23 @@ namespace etcd {
         std::shared_ptr<Lease::StubInterface> lease_stub_;
         std::shared_ptr<Lock::StubInterface> lock_stub_;
     };
+
+    namespace txn {
+        // Helper functions for transactions
+        std::unique_ptr<Compare> BuildKeyExistsComparison(
+            const std::string &key
+        );
+
+        std::unique_ptr<RequestOp> BuildPutRequest(
+            const std::string &key,
+            const std::string &value
+        );
+
+        std::unique_ptr<RequestOp> BuildRangeRequest(
+            const std::string &key,
+            const std::string &range_end
+        );
+    }
 }
 
 

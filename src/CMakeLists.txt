@@ -55,6 +55,11 @@ set_source_files_properties(
     PROPERTIES
     COMPILE_FLAGS "-w"
 )
+set_source_files_properties(
+  ${PB_SOURCES}
+    PROPERTIES
+    COMPILE_FLAGS "-w"
+)
 add_library(pb_types STATIC ${PB_SOURCES})
 # For files
 

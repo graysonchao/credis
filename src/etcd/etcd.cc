@@ -31,7 +31,6 @@ etcd::EtcdClient::EtcdClient(
     lock_stub_(lock_stub)
 {}
 
-
 /**
  * Put a value to a key in etcd
  * @param status
@@ -139,6 +138,19 @@ std::unique_ptr<LockResponse> etcd::EtcdClient::Lock(
   return res;
 }
 
+std::unique_ptr<UnlockResponse> etcd::EtcdClient::Unlock(
+    std::string lock_key
+) {
+  grpc::Status status;
+  grpc::ClientContext context;
+  UnlockRequest req;
+  auto res = std::unique_ptr<UnlockResponse>(new UnlockResponse());
+
+  req.set_key(lock_key);
+  status = lock_stub_->Unlock(&context, req, res.get());
+  return res;
+}
+
 /**
  * Guard some sequence of operations with an etcd transaction.
  * @param comparisons A list of conditions to be evaluated.
@@ -181,7 +193,7 @@ std::unique_ptr<TxnResponse> etcd::EtcdClient::Transaction(
  * @param key the key to check.
  * @return
  */
-std::unique_ptr<Compare> etcd::EtcdClient::CompareKeyExists(
+std::unique_ptr<Compare> etcd::txn::BuildKeyExistsComparison(
     const std::string &key
 ) {
   auto comparison = std::unique_ptr<Compare>(new Compare());
@@ -190,4 +202,18 @@ std::unique_ptr<Compare> etcd::EtcdClient::CompareKeyExists(
   comparison->set_key(key);
   comparison->set_create_revision(0);
   return comparison;
+}
+
+std::unique_ptr<RequestOp> etcd::txn::BuildPutRequest(
+    const std::string &key,
+    const std::string &value
+) {
+  auto pr = std::unique_ptr<PutRequest>(new PutRequest());
+  pr->set_key(key);
+  pr->set_value(value);
+
+  auto req_op = std::unique_ptr<RequestOp>(new RequestOp());
+  req_op->set_allocated_request_put(pr.get());
+
+  return req_op;
 }
