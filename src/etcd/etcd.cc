@@ -3,6 +3,7 @@
 //
 
 #include <future>
+#include <utility>
 #include <leveldb/include/leveldb/status.h>
 #include <glog/logging.h>
 #include "etcd.h"
@@ -17,6 +18,19 @@ etcd::EtcdClient::EtcdClient(std::shared_ptr<grpc::ChannelInterface> channel)
       lease_stub_(Lease::NewStub(channel)),
       lock_stub_(Lock::NewStub(channel))
 {}
+
+etcd::EtcdClient::EtcdClient(
+    std::shared_ptr<KV::StubInterface> kv_stub,
+    std::shared_ptr<Watch::StubInterface> watch_stub,
+    std::shared_ptr<Lease::StubInterface> lease_stub,
+    std::shared_ptr<Lock::StubInterface> lock_stub
+) :
+    kv_stub_(std::move(kv_stub)),
+    watch_stub_(watch_stub),
+    lease_stub_(lease_stub),
+    lock_stub_(lock_stub)
+{}
+
 
 /**
  * Put a value to a key in etcd
@@ -45,6 +59,7 @@ std::unique_ptr<PutResponse> etcd::EtcdClient::Put(
   req.set_lease(lease);
   req.set_prev_kv(prev_key);
   req.set_ignore_value(ignore_value);
+  req.set_ignore_lease(ignore_lease);
 
   auto res = std::unique_ptr<PutResponse>(new PutResponse());
   status = kv_stub_->Put(&context, req, res.get());

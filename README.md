@@ -75,3 +75,11 @@ Check that replication worked:
 redis-cli -p 6372
 > get a
 ```
+
+## Running unit tests
+From the build directory,
+```
+$ pwd
+/Users/gchao/code/credis/build
+$ make test # run tests
+```

@@ -21,6 +21,13 @@ namespace etcd {
     public:
         EtcdClient(std::shared_ptr<grpc::ChannelInterface> channel);
 
+        EtcdClient(
+            std::shared_ptr<KV::StubInterface> kv_stub,
+            std::shared_ptr<Watch::StubInterface> watch_stub,
+            std::shared_ptr<Lease::StubInterface> lease_stub,
+            std::shared_ptr<Lock::StubInterface> lock_stub
+        );
+
         std::unique_ptr<PutResponse> Put(
             std::string key,
             std::string value,
@@ -62,10 +69,11 @@ namespace etcd {
         );
 
     private:
-        std::unique_ptr<KV::Stub> kv_stub_;
-        std::unique_ptr<Watch::Stub> watch_stub_;
-        std::unique_ptr<Lease::Stub> lease_stub_;
-        std::unique_ptr<Lock::Stub> lock_stub_;
+        // Shared for mocking.
+        std::shared_ptr<KV::StubInterface> kv_stub_;
+        std::shared_ptr<Watch::StubInterface> watch_stub_;
+        std::shared_ptr<Lease::StubInterface> lease_stub_;
+        std::shared_ptr<Lock::StubInterface> lock_stub_;
     };
 }
 

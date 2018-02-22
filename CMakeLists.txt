@@ -5,4 +5,6 @@ project(credis)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
 
+enable_testing()
+
 add_subdirectory(src)

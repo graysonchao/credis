@@ -12,6 +12,8 @@ include_directories(${Protobuf_INCLUDE_DIRS})
 include_directories(${GRPC_INCLUDE_DIR})
 include_directories(${LevelDB_INCLUDES})
 
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/test)
+
 # For redis, build with either of
 #   make MALLOC=tcmalloc
 # or
@@ -44,6 +46,9 @@ set(PB_SOURCES
     "${PROTO_SRC_DIR}/kv.pb.cc"
     "${PROTO_SRC_DIR}/rpc.grpc.pb.cc"
     "${PROTO_SRC_DIR}/rpc.pb.cc"
+    "${PROTO_SRC_DIR}/v3lock.grpc.pb.cc"
+    "${PROTO_SRC_DIR}/v3lock.pb.cc"
+
 )
 set_source_files_properties(
   ${PB_SOURCES}
