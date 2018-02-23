@@ -10,6 +10,23 @@ _CLIENT_ID = str(uuid.uuid4())  # Used as the channel name receiving acks.
 
 
 class Basics(unittest.TestCase):
+    def setUp(self):
+        common.DeleteEtcdData()
+
+    def tearDown(self):
+        common.DeleteEtcdData()
+
+    @classmethod
+    def setUpClass(cls):
+        cls.etcd = common.StartEtcd()
+
+    @classmethod
+    def tearDownClass(cls):
+        for p in common.INIT_PORTS:
+            common.KillNode(port=p, stateless=True)
+        cls.etcd.kill()
+        common.DeleteEtcdDataDir()
+
     def testAck(self):
         common.Start()
 
@@ -36,11 +53,21 @@ class GcsModeTests(unittest.TestCase):
         self.ack_client = common.AckClient()
         self.master_client = common.MasterClient()
         self.head_client = common.GetHeadFromMaster(self.master_client)
+        common.DeleteEtcdData()
+
+    def tearDown(self):
+        common.DeleteEtcdData()
+
+    @classmethod
+    def setUpClass(cls):
+        cls.etcd = common.StartEtcd()
 
     @classmethod
     def tearDownClass(cls):
         for p in common.INIT_PORTS:
             common.KillNode(port=p, stateless=True)
+        cls.etcd.kill()
+        common.DeleteEtcdDataDir()
 
     def testNormal(self):
         common.Start()
@@ -71,14 +98,24 @@ class GcsModeTests(unittest.TestCase):
 
 class CheckpointFlush(unittest.TestCase):
     def setUp(self):
+        common.StartEtcd()
         self.ack_client = common.AckClient()
         self.master_client = common.MasterClient()
         self.head_client = common.GetHeadFromMaster(self.master_client)
+        common.DeleteEtcdData()
+
+    def tearDown(self):
+        common.DeleteEtcdData()
+
+    @classmethod
+    def setUpClass(cls):
+        cls.etcd = common.StartEtcd()
 
     @classmethod
     def tearDownClass(cls):
         for p in common.INIT_PORTS:
             common.KillNode(port=p, stateless=True)
+        common.DeleteEtcdDataDir()
 
     def testCannotFlush(self):
         common.Start(gcs_mode=common.GCS_CKPTFLUSH)

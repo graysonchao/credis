@@ -1,3 +1,4 @@
+from tempfile import mkdtemp
 import subprocess
 import time
 
@@ -9,6 +10,11 @@ import redis
 INIT_PORTS = [6369, 6370]
 INIT_PORTS = [6369, 6370, 6371, 6372]
 INIT_PORTS = [6369, 6370, 6371]
+
+ETCD_HOST = "127.0.0.1"
+ETCD_PORT = 32379
+ETCD_LISTEN_URL = "http://{0}:{1}".format(ETCD_HOST, ETCD_PORT)
+ETCD_DATA_DIR = "tests/test.etcd"
 
 PORTS = list(INIT_PORTS)
 MAX_USED_PORT = max(PORTS)  # For picking the next port.
@@ -27,9 +33,39 @@ def MakeChain(num_nodes=2):
     PORTS = list(chain)
     return chain
 
-
 def KillAll():
     subprocess.Popen(["pkill", "-9", "redis-server.*"]).wait()
+
+def StartEtcd():
+    return subprocess.Popen([
+        "etcd",
+        "--name",
+        "test",
+        "--data-dir",
+        ETCD_DATA_DIR,
+        "--listen-client-urls",
+        ETCD_LISTEN_URL,
+        "--advertise-client-urls",
+        ETCD_LISTEN_URL
+    ])
+
+def DeleteEtcdData():
+    subprocess.Popen([
+        "etcdctl",
+        "--endpoints",
+        ETCD_LISTEN_URL,
+        "del",
+        "--prefix",
+        "\"\""
+    ]).wait()
+
+def DeleteEtcdDataDir():
+    subprocess.Popen([
+        "rm",
+        "-r",
+        "-f",
+        ETCD_DATA_DIR
+    ]).wait()
 
 
 def KillNode(index=None, port=None, stateless=False):
@@ -79,12 +115,12 @@ def AddNode(master_client, port=None, gcs_mode=GCS_NORMAL):
             ],
             stdout=output,
             stderr=output)
-    time.sleep(0.1)
+    time.sleep(0.2)
     master_client.execute_command("MASTER.ADD", "127.0.0.1", str(new_port))
     member_client = redis.StrictRedis("127.0.0.1", new_port)
     master_port = master_client.connection_pool.connection_kwargs['port']
     member_client.execute_command("MEMBER.CONNECT_TO_MASTER", "127.0.0.1",
-                                  master_port)
+                                  ETCD_PORT, "test")
     if port is None:
         PORTS.append(new_port)
     return member, new_port
