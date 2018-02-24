@@ -27,8 +27,7 @@ make -j
 ```
 
 ## Setting up etcd
-Use the Procfile script. It starts up 3 nodes and a JSON GRPC proxy, which the
-master uses to communicate with etcd.
+Use the Procfile script. It starts up a 3-node etcd cluster. You can use foreman, goreman, or whatever foreman implementation.
 ```
 go get github.com/mattn/goreman
 goreman start
