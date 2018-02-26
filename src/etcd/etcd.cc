@@ -189,6 +189,64 @@ std::unique_ptr<TxnResponse> etcd::EtcdClient::Transaction(
 }
 
 /**
+ * Initiate a watch stream for the given key, range end, etc. by creating a stream and sending a WatchCreateRequest.
+ * The caller gets back a pointer to a stream that already has a WatchResponse buffered.
+ * @param key
+ * @param range_end
+ * @param start_revision Revision to start watching from - existing events after this revision will stream immediately
+ * @param progress_notify Set to "true" if etcd should periodically inform us of a recent revision (for fast recovery).
+ * @param filters A list of event types that etcd should filter out and not send.
+ * @param prev_kv Set to "true" if etcd should report the previous value of changed keys.
+ * @return
+ */
+std::unique_ptr<grpc::ClientReaderWriterInterface<WatchRequest, WatchResponse>>
+etcd::EtcdClient::WatchCreate(
+    const std::string &key,
+    const std::string &range_end,
+    const int64_t start_revision = -1,
+    const bool progress_notify = true,
+    const std::vector<WatchCreateRequest_FilterType> filters = {},
+    const bool prev_kv = false
+) {
+  grpc::Status status;
+  // TODO gchao: Does this leak memory? It's not clear if the GRPC stub frees the context. Can't find any docs.
+  auto context = new grpc::ClientContext();
+  auto wcr = new WatchCreateRequest();
+  wcr->set_key(key);
+  wcr->set_range_end(range_end);
+  if (start_revision >= 0) {
+    wcr->set_start_revision(start_revision);
+  }
+  wcr->set_progress_notify(progress_notify);
+  for (WatchCreateRequest_FilterType filter : filters) {
+    wcr->add_filters(filter);
+  }
+
+  WatchRequest wrapper;
+  wrapper.set_allocated_create_request(wcr);
+  auto watch_stream = watch_stub_->Watch(context);
+  watch_stream->Write(wrapper);
+  return watch_stream;
+}
+
+/**
+ * Cancel the given watch. Note that whatever stream was being used to monitor the connection must be closed separately.
+ * @param watch_id
+ */
+void etcd::EtcdClient::WatchCancel(const int64_t watch_id) {
+  grpc::Status status;
+  grpc::ClientContext context;
+  auto wcr = std::unique_ptr<WatchCancelRequest>(new WatchCancelRequest());
+  wcr->set_watch_id(watch_id);
+
+  WatchRequest wrapper;
+  wrapper.set_allocated_cancel_request(wcr.get());
+  auto watch_stream = watch_stub_->Watch(&context);
+  watch_stream->Write(wrapper);
+  watch_stream->WritesDone();
+}
+
+/**
  * Build a Compare object that checks if a key exists.
  * @param key the key to check.
  * @return
@@ -208,12 +266,27 @@ std::unique_ptr<RequestOp> etcd::txn::BuildPutRequest(
     const std::string &key,
     const std::string &value
 ) {
-  auto pr = std::unique_ptr<PutRequest>(new PutRequest());
+  auto pr = new PutRequest();
   pr->set_key(key);
   pr->set_value(value);
 
-  auto req_op = std::unique_ptr<RequestOp>(new RequestOp());
-  req_op->set_allocated_request_put(pr.get());
+  auto request_op = std::unique_ptr<RequestOp>(new RequestOp());
+  request_op->set_allocated_request_put(pr);
+  return request_op;
+}
 
-  return req_op;
+/**
+ * Build a RequestOp to get a single key.
+ * @return
+ */
+std::unique_ptr<RequestOp> etcd::txn::BuildGetRequest(
+  const std::string key
+) {
+  auto rr = new RangeRequest();
+  rr->set_key(key);
+  rr->set_range_end("");
+
+  auto request_op = std::unique_ptr<RequestOp>(new RequestOp());
+  request_op->set_allocated_request_range(rr);
+  return request_op;
 }
