@@ -109,6 +109,8 @@ def AddNode(master_client, port=None, gcs_mode=GCS_NORMAL):
                 "redis/src/redis-server",
                 "--loadmodule",
                 "build/src/libmember.so",
+                "127.0.0.1",
+                str(new_port),
                 str(gcs_mode),
                 "--port",
                 str(new_port),

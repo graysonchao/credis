@@ -44,6 +44,17 @@ namespace etcd {
             int64_t revision = -1
         );
 
+        std::unique_ptr<grpc::ClientReaderWriterInterface<WatchRequest, WatchResponse>> WatchCreate(
+            const std::string &key,
+            const std::string &range_end,
+            int64_t start_revision,
+            bool progress_notify,
+            const std::vector<WatchCreateRequest_FilterType> filters,
+            bool prev_kv
+        );
+
+        void WatchCancel(int64_t watch_id);
+
         std::unique_ptr<LeaseGrantResponse> LeaseGrant(
             int64_t requested_ttl,
             int64_t requested_id = 0
@@ -90,6 +101,10 @@ namespace etcd {
         std::unique_ptr<RequestOp> BuildRangeRequest(
             const std::string &key,
             const std::string &range_end
+        );
+
+        std::unique_ptr<RequestOp> BuildGetRequest(
+            const std::string key
         );
     }
 }
