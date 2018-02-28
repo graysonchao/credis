@@ -37,8 +37,10 @@ class MasterClient {
    */
   Status Connect(
       const std::string& address,
-      const int port,
-      const std::string& chain_id = "foobar"
+      int port,
+      const std::string& chain_id,
+      const std::string& redis_addr,
+      int own_port
   );
 
   // TODO(zongheng): impl.
@@ -66,11 +68,15 @@ class MasterClient {
  private:
   const std::string WatermarkKey(std::string chain_id, Watermark w) const;
   const std::string LastIDKey(std::string chain_id) const;
-  const std::string ConnInfoKey(std::string chain_id) const;
   const std::string JoinLock(std::string chain_id) const;
-  void StartHeartbeat(std::shared_ptr<grpc::Channel> channel);
-  void AcquireID(std::string chain_id);
-  void RegisterAsMember(std::string chain_id);
+  const std::string HeartbeatKey(std::string chain_id, int64_t member_id) const;
+  const std::string ConfigKey(std::string chain_id, int64_t member_id) const;
+  void StartHeartbeat();
+  void AcquireID();
+  void RegisterMemberInfo();
+  void StartWatchingConfig();
+
+  void HandleConfigPut(Event e, std::shared_ptr<etcd::EtcdClient> etcd);
 
   static constexpr int64_t kSnCkptInit = 0;
   static constexpr int64_t kSnFlushedInit = 0;
@@ -80,11 +86,27 @@ class MasterClient {
   const int kHeartbeatTimeoutSec = 20;
 
   std::unique_ptr<etcd::EtcdClient> etcd_client_;
-  std::thread heartbeat_thread_;
+  std::shared_ptr<grpc::Channel> channel_;
+  std::unique_ptr<std::thread> heartbeat_thread_;
+  std::unique_ptr<std::thread> config_thread_;
   std::string chain_id_;
   int64_t heartbeat_lease_id_;
   int64_t member_id_ = kUnsetMemberID;
+  std::string role_ = "uninitialized";
+  std::string prev_id_ = "-1";
+  std::string next_id_ = "-1";
+  std::string redis_addr_;
+  int redis_port_;
 
+};
+
+enum class ChainRole : int {
+    // 1-node chain: serves reads and writes.
+    kSingleton = 0,
+    // Values below imply # nodes in chain > 1.
+    kHead = 1,
+    kMiddle = 2,
+    kTail = 3,
 };
 
 #endif  // CREDIS_MASTER_CLIENT_H_

@@ -129,6 +129,20 @@ class RedisChainModule {
     }
   }
 
+  void SetListenAddr(std::string addr) {
+    listen_addr_ = addr;
+  }
+  std::string ListenAddr() {
+    return listen_addr_;
+  }
+
+  void SetListenPort(long long port) {
+    listen_port_ = (int) port;
+  }
+  int ListenPort() {
+    return listen_port_;
+  }
+
   RedisChainModule()
       : chain_role_(ChainRole::kSingleton),
         gcs_mode_(GcsMode::kNormal),
@@ -168,10 +182,19 @@ class RedisChainModule {
     }
   }
 
-  Status ConnectToMaster(const std::string& address, int port, const std::string& chain_id) {
-    return master_client_.Connect(address, port, chain_id);
+  Status ConnectToMaster(
+      const std::string& address,
+      int port,
+      const std::string& chain_id,
+      const std::string& own_addr,
+      int own_port
+  ) {
+    return master_client_.Connect(address, port, chain_id, own_addr, own_port);
   }
-  MasterClient& Master() { return master_client_; }
+
+  MasterClient& Master() {
+    return master_client_;
+  }
 
   Status OpenCheckpoint(leveldb::DB** db) {
     static leveldb::Options options;
@@ -234,6 +257,8 @@ class RedisChainModule {
 
   ChainRole chain_role_;
   GcsMode gcs_mode_;
+  std::string listen_addr_;
+  int listen_port_;
   bool gcs_mode_initialized_ = false;  // To guard against re-initialization.
 
   // The previous node in the chain (or NULL if none)
@@ -514,7 +539,9 @@ int MemberSetRole_RedisCommand(RedisModuleCtx* ctx,
   LOG(INFO) << "In MemberSetRole drop_writes: " << drop_writes;
   if (drop_writes) module.SetDropWrites(drop_writes);
 
-  // TODO(zongheng): I don't understand why we do this.
+  // Send all the sns that the new successor might not have received.
+  // Preserves the Update Propagation Invariant ("Failure of Other Servers" in CR paper)
+  // The list of sns being iterated is all the ones the new next might not have received.
   if (module.child()) {
     for (auto i = module.sn_to_key().find(first_sn);
          i != module.sn_to_key().end(); ++i) {
@@ -554,7 +581,14 @@ int MemberConnectToMaster_RedisCommand(RedisModuleCtx* ctx,
   RedisModule_StringToLongLong(argv[2], &port);
   size_t chain_size = 0;
   const char* chain_ptr = RedisModule_StringPtrLen(argv[3], &chain_size);
-  Status s = module.ConnectToMaster(std::string(addr_ptr, addr_size), port, std::string(chain_ptr, chain_size));
+  int listen_port = module.ListenPort();
+  Status s = module.ConnectToMaster(
+      std::string(addr_ptr, addr_size),
+      port,
+      std::string(chain_ptr, chain_size),
+      module.ListenAddr(),
+      module.ListenPort()
+  );
   if (!s.ok()) return RedisModule_ReplyWithError(ctx, s.ToString().data());
   return RedisModule_ReplyWithSimpleString(ctx, "OK");
 }
@@ -992,10 +1026,22 @@ int RedisModule_OnLoad(RedisModuleCtx* ctx,
     return REDISMODULE_ERR;
   }
 
+  CHECK_GE(argc, 2)
+    << "Usage: --loadmodule libmember.so REDIS_LISTEN_ADDR REDIS_LISTEN_PORT [GCS_MODE] --port REDIS_LISTEN_PORT ...";
   // Command parsing.
+  size_t listen_len;
+  const char* listen_str = RedisModule_StringPtrLen(argv[0], &listen_len);
+  std::string listen_addr(listen_str, listen_len);
+  module.SetListenAddr(listen_addr);
+
+  long long listen_port = 0;
+  CHECK_EQ(REDISMODULE_OK, RedisModule_StringToLongLong(argv[1], &listen_port));
+  module.SetListenPort(listen_port);
+  LOG(INFO) << "Will send Redis commands to self at " << module.ListenAddr() << ":" << module.ListenPort();
+
   long long gcs_mode = 0;
-  if (argc > 0) {
-    CHECK_EQ(REDISMODULE_OK, RedisModule_StringToLongLong(argv[0], &gcs_mode));
+  if (argc > 2) {
+    CHECK_EQ(REDISMODULE_OK, RedisModule_StringToLongLong(argv[2], &gcs_mode));
   }
   switch (gcs_mode) {
   case 0:
