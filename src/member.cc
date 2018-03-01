@@ -29,6 +29,7 @@ extern "C" {
 
 #include "master_client.h"
 #include "utils.h"
+#include "chain.h"
 
 const char* const kCheckpointPath =
     "/tmp/gcs_ckpt";  // TODO(zongheng): don't hardcode.
@@ -174,10 +175,10 @@ class RedisChainModule {
 
     child_ = NULL;
     parent_ = NULL;
-    if (next_address != "nil") {
+    if (next_address != chain::kNoMember) {
       child_ = AsyncConnect(next_address, std::stoi(next_port));
     }
-    if (prev_address != "nil") {
+    if (prev_address != chain::kNoMember) {
       parent_ = AsyncConnect(prev_address, std::stoi(prev_port));
     }
   }
@@ -491,13 +492,13 @@ int MemberSetRole_RedisCommand(RedisModuleCtx* ctx,
     return RedisModule_WrongArity(ctx);
   }
   std::string role = ReadString(argv[1]);
-  if (role == "singleton") {
+  if (role == chain::kRoleSingleton) {
     module.SetRole(RedisChainModule::ChainRole::kSingleton);
-  } else if (role == "head") {
+  } else if (role == chain::kRoleHead) {
     module.SetRole(RedisChainModule::ChainRole::kHead);
-  } else if (role == "middle") {
+  } else if (role == chain::kRoleMiddle) {
     module.SetRole(RedisChainModule::ChainRole::kMiddle);
-  } else if (role == "tail") {
+  } else if (role == chain::kRoleTail) {
     module.SetRole(RedisChainModule::ChainRole::kTail);
   } else {
     CHECK(role == "");

@@ -1,3 +1,4 @@
+#include <boost/optional/optional.hpp>
 #include <chrono>
 #include <string>
 #include <thread>
@@ -7,9 +8,15 @@
 #include "hiredis/hiredis.h"
 
 #include "master_client.h"
+#include "utils.h"
+#include "chain.h"
 
-using namespace etcd;
 using json = nlohmann::json;
+
+const std::string MasterClient::kKeyPrefix = "credis:";
+const int MasterClient::kHeartbeatIntervalSec = 5;
+const int MasterClient::kHeartbeatTimeoutSec = 20;
+const int kHeartbeatBackoffMultiplier = 2;
 
 /**
  * Connect to the master.
@@ -27,7 +34,7 @@ Status MasterClient::Connect(
     const int redis_port
 ) {
   channel_ = grpc::CreateChannel(address + ":" + std::to_string(port), grpc::InsecureChannelCredentials());
-  etcd_client_ = std::unique_ptr<EtcdClient>(new EtcdClient(channel_));
+  etcd_client_ = std::unique_ptr<etcd::Client>(new etcd::Client(channel_));
   chain_id_ = chain_id;
   redis_addr_ = redis_addr;
   redis_port_ = redis_port;
@@ -136,7 +143,7 @@ void MasterClient::StartHeartbeat() {
   heartbeat_thread_ = std::unique_ptr<std::thread>(new std::thread(
       // No need to join - this should only die if the process dies.
       [this](int64_t lease_id, int hb_interval) {
-          auto etcd = std::unique_ptr<EtcdClient>(new EtcdClient(channel_));
+          auto etcd = std::unique_ptr<etcd::Client>(new etcd::Client(channel_));
           while (true) {
             etcd->LeaseKeepAlive(lease_id);
             std::this_thread::sleep_for(std::chrono::seconds(hb_interval));
@@ -175,8 +182,8 @@ void MasterClient::AcquireID() {
 
   // Transactions are used by etcd to guard operations based on a condition.
   // This says, "If I am holding the lock $lock_id, then find out the last ID that was assigned."
-  std::vector<Compare> compare_lock_exists = {*etcd::txn::BuildKeyExistsComparison(lock_id)};
-  std::vector<RequestOp> success_ops = {*etcd::txn::BuildGetRequest(LastIDKey(chain_id_))};
+  std::vector<Compare> compare_lock_exists = {*etcd::util::BuildKeyExistsComparison(lock_id)};
+  std::vector<RequestOp> success_ops = {*etcd::util::BuildGetRequest(LastIDKey(chain_id_))};
   std::vector<RequestOp> failure_ops = {};
   auto get_tx = etcd_client_->Transaction(compare_lock_exists, success_ops, failure_ops);
   CHECK(get_tx->succeeded()) << "Tried to get the last assigned ID without holding the join lock. Is etcd running?";
@@ -191,7 +198,7 @@ void MasterClient::AcquireID() {
   }
 
   // This says, "If I am holding the lock, then write down in etcd that my ID was the last ID assigned."
-  success_ops = {*etcd::txn::BuildPutRequest(LastIDKey(chain_id_), std::to_string(member_id_))};
+  success_ops = {*etcd::util::BuildPutRequest(LastIDKey(chain_id_), std::to_string(member_id_))};
   failure_ops = {};
   auto put_tx = etcd_client_->Transaction(compare_lock_exists, success_ops, failure_ops);
   CHECK(put_tx->succeeded())
@@ -219,7 +226,8 @@ void MasterClient::RegisterMemberInfo() {
       // include lease in the etcd call so that the key disappears if we time out from etcd.
       heartbeat_lease_id_
   );
-  LOG(INFO) << "Registered new connection info: " << my_conn_info.dump();
+  LOG(INFO) << "Registered new connection info: " << my_conn_info.dump()
+            << " (rev " << put_key->header().revision() << ")";
 }
 
 /**
@@ -233,7 +241,7 @@ void MasterClient::StartWatchingConfig() {
   config_thread_ = std::unique_ptr<std::thread>(new std::thread(
       // No need to join - this should only die if the process dies.
       [this]() {
-          auto etcd = std::shared_ptr<EtcdClient>(new EtcdClient(channel_));
+          auto etcd = std::shared_ptr<etcd::Client>(new etcd::Client(channel_));
           auto changes = etcd->WatchCreate(
               ConfigKey(chain_id_, member_id_),
               /*range_end=*/"",
@@ -269,29 +277,35 @@ void MasterClient::StartWatchingConfig() {
     ));
 }
 
-void MasterClient::HandleConfigPut(Event put_event, std::shared_ptr<etcd::EtcdClient> etcd) {
+void MasterClient::HandleConfigPut(Event put_event, std::shared_ptr<etcd::Client> etcd) {
   CHECK(put_event.type() == Event_EventType_PUT) << "HandleConfigPut must be called on a PUT event";
   auto my_config = json::parse(put_event.kv().value());
   std::string my_role = my_config["role"];
   std::string prev_id = my_config["prev"];
   std::string next_id = my_config["next"];
 
-  if (my_role == "singleton") {
+  if (my_role == chain::kRoleSingleton) {
     auto redisCtx = std::unique_ptr<redisContext>(redisConnect(redis_addr_.c_str(), redis_port_));
     redisReply* reply = reinterpret_cast<redisReply*>(redisCommand(
         redisCtx.get(),
         "MEMBER.SET_ROLE %s %s %s %s %s %s %s",
-        my_role.c_str(), "nil", "nil", "nil", "nil", "-1", "0"
+        my_role.c_str(),
+        chain::kNoMember.c_str(),
+        chain::kNoMember.c_str(),
+        chain::kNoMember.c_str(),
+        chain::kNoMember.c_str(),
+        "-1",
+        "0"
     ));
     freeReplyObject(reply);
     return;
   }
 
   // Arguments to MEMBER.SET_ROLE.
-  std::string prev_address = "nil";
-  std::string next_address = "nil";
-  std::string prev_port = "nil";
-  std::string next_port = "nil";
+  std::string prev_address = chain::kNoMember;
+  std::string next_address = chain::kNoMember;
+  std::string prev_port = chain::kNoMember;
+  std::string next_port = chain::kNoMember;
   std::string sn_string = "-1";
   std::string drop_writes_string = "0";
 
@@ -300,18 +314,18 @@ void MasterClient::HandleConfigPut(Event put_event, std::shared_ptr<etcd::EtcdCl
   std::vector<Compare> comparisons;
   std::vector<RequestOp> success_ops;
   std::vector<RequestOp> failure_ops = {};
-  bool has_next = (my_role != "tail" && my_role != "singleton");
-  bool has_prev = (my_role != "head" && my_role != "singleton");
+  bool has_next = (my_role != chain::kRoleTail && my_role != chain::kRoleSingleton);
+  bool has_prev = (my_role != chain::kRoleHead && my_role != chain::kRoleSingleton);
   std::string prev_hb_key, next_hb_key;
   if (has_next) {
     next_hb_key = HeartbeatKey(chain_id_, std::stol(next_id));
-    comparisons.push_back(*etcd::txn::BuildKeyExistsComparison(next_hb_key));
-    success_ops.push_back(*etcd::txn::BuildGetRequest(next_hb_key));
+    comparisons.push_back(*etcd::util::BuildKeyExistsComparison(next_hb_key));
+    success_ops.push_back(*etcd::util::BuildGetRequest(next_hb_key));
   }
   if (has_prev) {
     prev_hb_key = HeartbeatKey(chain_id_, std::stol(prev_id));
-    comparisons.push_back(*etcd::txn::BuildKeyExistsComparison(prev_hb_key));
-    success_ops.push_back(*etcd::txn::BuildGetRequest(prev_hb_key));
+    comparisons.push_back(*etcd::util::BuildKeyExistsComparison(prev_hb_key));
+    success_ops.push_back(*etcd::util::BuildGetRequest(prev_hb_key));
   }
   auto tx = etcd->Transaction(comparisons, success_ops, failure_ops);
   if (tx->succeeded()) {
@@ -334,21 +348,24 @@ void MasterClient::HandleConfigPut(Event put_event, std::shared_ptr<etcd::EtcdCl
 
   // Block until the new successor updates its reported state.
   if (has_next) {
-    int64_t backoff_sec = 1;
-    while (true) {
-      auto next_config_req = etcd->Range(next_hb_key, "", -1);
-      if (next_config_req->kvs_size() > 0) {
-        auto next_config = json::parse(next_config_req->kvs().Get(0).value());
-        if (next_config["prev"] == std::to_string(member_id_)) {
-          LOG(INFO) << "New child reports us as its parent - forwarding writes...";
-          break;
-        }
-      }
-      LOG(INFO) << "New child " << next_id << " has not reported us as its parent yet. "
-                << "Waiting " << backoff_sec << "sec";
-      std::this_thread::sleep_for(std::chrono::seconds(backoff_sec));
-      backoff_sec = backoff_sec * 2;
-    }
+    backoff::ExponentialBackoff(
+      [this, next_id, next_hb_key, etcd] ()->bool {
+          auto next_config_req = etcd->Range(next_hb_key, "", -1);
+          if (next_config_req->kvs_size() > 0) {
+            auto next_config = json::parse(next_config_req->kvs().Get(0).value());
+            if (next_config["prev"] == std::to_string(member_id_)) {
+              LOG(INFO) << "New child reports us as its parent - forwarding writes...";
+              return true;
+            }
+          }
+          LOG(INFO) << "New child " << next_id
+                    << " has not reported us as its parent yet. Waiting...";
+          return false;
+      },
+      1000 * kHeartbeatIntervalSec,
+      1000 * kHeartbeatTimeoutSec,
+      2
+    );
   }
 
   // Set my own role by sending myself a Redis command.

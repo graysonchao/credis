@@ -33,7 +33,7 @@ namespace {
           *kv_stub,
           Put(_, EqualsProtobufMessage(expected), _)
       );
-      auto client = etcd::EtcdClient(kv_stub, watch_stub, lease_stub, lock_stub);
+      auto client = etcd::Client(kv_stub, watch_stub, lease_stub, lock_stub);
       client.Put("foo", "bar", 0, false, false, false);
     }
 
@@ -50,7 +50,7 @@ namespace {
           *kv_stub,
           Range(_, EqualsProtobufMessage(expected), _)
       );
-      auto client = etcd::EtcdClient(kv_stub, watch_stub, lease_stub, lock_stub);
+      auto client = etcd::Client(kv_stub, watch_stub, lease_stub, lock_stub);
       client.Range("foo", "bar", 0);
     }
 
@@ -66,7 +66,7 @@ namespace {
           *lease_stub,
           LeaseGrant(_, EqualsProtobufMessage(expected), _)
       );
-      auto client = etcd::EtcdClient(kv_stub, watch_stub, lease_stub, lock_stub);
+      auto client = etcd::Client(kv_stub, watch_stub, lease_stub, lock_stub);
       client.LeaseGrant(0, 0);
     }
 };

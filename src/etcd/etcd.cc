@@ -5,27 +5,27 @@
 #include <future>
 #include <utility>
 #include <leveldb/include/leveldb/status.h>
-#include <glog/logging.h>
+#include "glog/logging.h"
 #include "etcd.h"
 
 using namespace etcdserverpb;
 using namespace v3lockpb;
 using namespace mvccpb;
 
-etcd::EtcdClient::EtcdClient(std::shared_ptr<grpc::ChannelInterface> channel)
+etcd::Client::Client(std::shared_ptr<grpc::ChannelInterface> channel)
     : kv_stub_(KV::NewStub(channel)),
       watch_stub_(Watch::NewStub(channel)),
       lease_stub_(Lease::NewStub(channel)),
       lock_stub_(Lock::NewStub(channel))
 {}
 
-etcd::EtcdClient::EtcdClient(
+etcd::Client::Client(
     std::shared_ptr<KV::StubInterface> kv_stub,
     std::shared_ptr<Watch::StubInterface> watch_stub,
     std::shared_ptr<Lease::StubInterface> lease_stub,
     std::shared_ptr<Lock::StubInterface> lock_stub
 ) :
-    kv_stub_(std::move(kv_stub)),
+    kv_stub_(kv_stub),
     watch_stub_(watch_stub),
     lease_stub_(lease_stub),
     lock_stub_(lock_stub)
@@ -42,7 +42,7 @@ etcd::EtcdClient::EtcdClient(
  * @param ignore_lease
  * @return
  */
-std::unique_ptr<PutResponse> etcd::EtcdClient::Put(
+std::unique_ptr<PutResponse> etcd::Client::Put(
     const std::string key,
     const std::string value,
     const int64_t lease,
@@ -68,17 +68,18 @@ std::unique_ptr<PutResponse> etcd::EtcdClient::Put(
 /**
  * Query etcd for a key or a range of keys.
  * Returns a unique_ptr to a RangeResponse.
+ * @param status a grpc::Status that will be overwritten with the reply's status.
  * @param key
  * @param range_end
- * @param revision
+ * @param revision (latest by default)
  * @return
  */
-std::unique_ptr<RangeResponse> etcd::EtcdClient::Range(
+std::unique_ptr<RangeResponse> etcd::Client::Range(
     const std::string &key,
     const std::string &range_end,
-    const int64_t revision
+    const int64_t revision,
+    grpc::Status &status
 ) {
-  grpc::Status status;
   grpc::ClientContext context;
   RangeRequest req;
   req.set_key(key);
@@ -89,8 +90,20 @@ std::unique_ptr<RangeResponse> etcd::EtcdClient::Range(
   status = kv_stub_->Range(&context, req, res.get());
   return res;
 }
+/**
+ * Convenience method for when you want to ignore the response status.
+ */
+std::unique_ptr<RangeResponse> etcd::Client::Range(
+    const std::string &key,
+    const std::string &range_end,
+    const int64_t revision
+) {
+  grpc::Status status;
+  return Range(key, range_end, revision, status);
+}
 
-std::unique_ptr<LeaseGrantResponse> etcd::EtcdClient::LeaseGrant(
+
+std::unique_ptr<LeaseGrantResponse> etcd::Client::LeaseGrant(
     int64_t requested_ttl,
     int64_t requested_id
 ) {
@@ -105,7 +118,7 @@ std::unique_ptr<LeaseGrantResponse> etcd::EtcdClient::LeaseGrant(
   return res;
 }
 
-std::unique_ptr<LeaseKeepAliveResponse> etcd::EtcdClient::LeaseKeepAlive(
+std::unique_ptr<LeaseKeepAliveResponse> etcd::Client::LeaseKeepAlive(
     int64_t id
 ) {
   grpc::Status status;
@@ -123,7 +136,7 @@ std::unique_ptr<LeaseKeepAliveResponse> etcd::EtcdClient::LeaseKeepAlive(
   return res;
 }
 
-std::unique_ptr<LockResponse> etcd::EtcdClient::Lock(
+std::unique_ptr<LockResponse> etcd::Client::Lock(
     std::string name,
     int64_t lease_id
 ) {
@@ -138,7 +151,7 @@ std::unique_ptr<LockResponse> etcd::EtcdClient::Lock(
   return res;
 }
 
-std::unique_ptr<UnlockResponse> etcd::EtcdClient::Unlock(
+std::unique_ptr<UnlockResponse> etcd::Client::Unlock(
     std::string lock_key
 ) {
   grpc::Status status;
@@ -158,10 +171,10 @@ std::unique_ptr<UnlockResponse> etcd::EtcdClient::Unlock(
  * @param failure_ops Operations to perform if all conditions are false.
  * @return A response indicating success and the results of ops that were performed.
  */
-std::unique_ptr<TxnResponse> etcd::EtcdClient::Transaction(
-    std::vector<Compare>& comparisons,
-    std::vector<RequestOp>& success_ops,
-    std::vector<RequestOp>& failure_ops
+std::unique_ptr<TxnResponse> etcd::Client::Transaction(
+    const std::vector<Compare>& comparisons,
+    const std::vector<RequestOp>& success_ops,
+    const std::vector<RequestOp>& failure_ops
 ) {
   grpc::Status status;
   grpc::ClientContext context;
@@ -200,7 +213,7 @@ std::unique_ptr<TxnResponse> etcd::EtcdClient::Transaction(
  * @return
  */
 std::unique_ptr<grpc::ClientReaderWriterInterface<WatchRequest, WatchResponse>>
-etcd::EtcdClient::WatchCreate(
+etcd::Client::WatchCreate(
     const std::string &key,
     const std::string &range_end,
     const int64_t start_revision = -1,
@@ -233,7 +246,7 @@ etcd::EtcdClient::WatchCreate(
  * Cancel the given watch. Note that whatever stream was being used to monitor the connection must be closed separately.
  * @param watch_id
  */
-void etcd::EtcdClient::WatchCancel(const int64_t watch_id) {
+void etcd::Client::WatchCancel(const int64_t watch_id) {
   grpc::Status status;
   grpc::ClientContext context;
   auto wcr = std::unique_ptr<WatchCancelRequest>(new WatchCancelRequest());
@@ -251,7 +264,7 @@ void etcd::EtcdClient::WatchCancel(const int64_t watch_id) {
  * @param key the key to check.
  * @return
  */
-std::unique_ptr<Compare> etcd::txn::BuildKeyExistsComparison(
+std::unique_ptr<Compare> etcd::util::BuildKeyExistsComparison(
     const std::string &key
 ) {
   auto comparison = std::unique_ptr<Compare>(new Compare());
@@ -262,7 +275,7 @@ std::unique_ptr<Compare> etcd::txn::BuildKeyExistsComparison(
   return comparison;
 }
 
-std::unique_ptr<RequestOp> etcd::txn::BuildPutRequest(
+std::unique_ptr<RequestOp> etcd::util::BuildPutRequest(
     const std::string &key,
     const std::string &value
 ) {
@@ -279,8 +292,8 @@ std::unique_ptr<RequestOp> etcd::txn::BuildPutRequest(
  * Build a RequestOp to get a single key.
  * @return
  */
-std::unique_ptr<RequestOp> etcd::txn::BuildGetRequest(
-  const std::string key
+std::unique_ptr<RequestOp> etcd::util::BuildGetRequest(
+  const std::string &key
 ) {
   auto rr = new RangeRequest();
   rr->set_key(key);
@@ -290,3 +303,22 @@ std::unique_ptr<RequestOp> etcd::txn::BuildGetRequest(
   request_op->set_allocated_request_range(rr);
   return request_op;
 }
+
+/**
+ * Convenience method to construct a RangeRequest that gets all keys where KEY is a prefix.
+ * This exists because of etcd's questionable decision to make (int)key+1 a magic value for the range end:
+ * If you GetRange(KEY, to_string ((int)KEY+1), you are really getting all keys prefixed with KEY.
+ * Usage: EtcdClient::Range(key, EtcdClient::RangePrefix(key))
+ * @return
+ */
+std::string etcd::util::RangePrefix(const std::string &key) {
+  // If the last char is \xff the prefix "wraps" (https://coreos.com/etcd/docs/latest/learning/api.html#key-value-api)
+  const auto last_usable_char_pos = key.find_last_not_of((char)'\xFF');
+  CHECK(last_usable_char_pos != 0 && last_usable_char_pos != std::string::npos)
+  << "Can't take the prefix of a key string whose only bytes are 0xFF.";
+  // substr takes a length, but find_last_not_of returns a position, so we add 1.
+  auto prefix = key.substr(0, last_usable_char_pos + 1);
+  prefix.back() += 1;
+  return prefix;
+}
+

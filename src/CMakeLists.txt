@@ -53,14 +53,13 @@ set(PB_SOURCES
 set_source_files_properties(
   ${PB_SOURCES}
     PROPERTIES
-    COMPILE_FLAGS "-w"
+    COMPILE_FLAGS "-Wno-unused-variable -Wno-unused-parameter"
 )
-set_source_files_properties(
-  ${PB_SOURCES}
-    PROPERTIES
-    COMPILE_FLAGS "-w"
-)
-add_library(pb_types STATIC ${PB_SOURCES})
+add_library(pb_types SHARED ${PB_SOURCES})
+target_compile_options(pb_types PUBLIC -Wno-unused-variable -Wno-unused-parameter)
+target_link_libraries(pb_types gRPC::grpc)
+target_link_libraries(pb_types gRPC::grpc++)
+target_link_libraries(pb_types ${Protobuf_LIBRARIES})
 # For files
 
 # timer
@@ -73,17 +72,22 @@ add_library(utils STATIC utils.cc)
 target_compile_options(utils PUBLIC ${REDIS_MODULE_CFLAGS} -fPIC)
 
 add_library(etcd STATIC etcd/etcd.cc)
-target_link_libraries(etcd gRPC::grpc)
-target_link_libraries(etcd gRPC::grpc++)
-target_link_libraries(etcd ${Protobuf_LIBRARIES})
+target_compile_options(etcd PUBLIC ${REDIS_MODULE_CFLAGS} -fPIC)
+target_link_libraries(etcd glog::glog)
 target_link_libraries(etcd pb_types)
+
+add_library(chain STATIC chain.cc)
+target_compile_options(chain PUBLIC ${REDIS_MODULE_CFLAGS} -fPIC)
+target_link_libraries(chain glog::glog)
 
 # master_client
 add_library(master_client STATIC master_client.cc)
 target_compile_options(master_client PUBLIC ${REDIS_MODULE_CFLAGS} -fPIC)
+target_link_libraries(master_client ${REDIS_MODULE_LDFLAGS})
 target_link_libraries(master_client ${LevelDB_LIBRARIES})
 target_link_libraries(master_client glog::glog)
 target_link_libraries(master_client etcd)
+target_link_libraries(master_client chain)
 # CPPFLAGS += `pkg-config --cflags protobuf grpc`
 
 # client
@@ -101,7 +105,7 @@ target_link_libraries(master glog::glog)
 target_link_libraries(master ${LevelDB_LIBRARIES})
 
 # member
-add_library(member MODULE member.cc)
+add_library(member MODULE member.cc chain.cc)
 target_compile_options(member PUBLIC ${REDIS_MODULE_CFLAGS} -fPIC)
 target_link_libraries(member ${REDIS_MODULE_LDFLAGS})
 target_link_libraries(member utils)
@@ -109,6 +113,19 @@ target_link_libraries(member glog::glog)
 target_link_libraries(member ${LevelDB_LIBRARIES})
 target_link_libraries(member master_client)
 target_link_libraries(member ${MALLOC_LIBRARY})
+
+# new master (TODO rename from coordinator later)
+add_library(coordinator STATIC coordinator.cc)
+target_compile_options(coordinator PUBLIC ${REDIS_MODULE_CFLAGS} -fPIC)
+target_link_libraries(coordinator ${REDIS_MODULE_LDFLAGS})
+target_link_libraries(coordinator glog::glog)
+target_link_libraries(coordinator etcd)
+target_link_libraries(coordinator utils)
+target_link_libraries(coordinator chain)
+
+add_executable(run_coordinator run_coordinator.cc)
+target_link_libraries(run_coordinator etcd)
+target_link_libraries(run_coordinator coordinator)
 
 # Benchmarks.
 add_executable(credis_parput_bench credis_parput_bench.cc)

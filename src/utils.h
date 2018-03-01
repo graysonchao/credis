@@ -2,6 +2,7 @@
 #define CREDIS_UTILS_H_
 
 #include <string>
+#include <functional>
 
 #include "redis_decls.h"
 

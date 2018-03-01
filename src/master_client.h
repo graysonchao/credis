@@ -65,6 +65,11 @@ class MasterClient {
   Status GetWatermark(Watermark w, int64_t* val) const;
   Status SetWatermark(Watermark w, int64_t new_val);
 
+  static const std::string kKeyPrefix;// = "credis/";
+  static const int kHeartbeatIntervalSec;// = 5;
+  static const int kHeartbeatTimeoutSec;// = 20;
+  static const int kHeartbeatBackoffMultiplier;// = 2;
+
  private:
   const std::string WatermarkKey(std::string chain_id, Watermark w) const;
   const std::string LastIDKey(std::string chain_id) const;
@@ -76,16 +81,13 @@ class MasterClient {
   void RegisterMemberInfo();
   void StartWatchingConfig();
 
-  void HandleConfigPut(Event e, std::shared_ptr<etcd::EtcdClient> etcd);
+  void HandleConfigPut(Event e, std::shared_ptr<etcd::Client> etcd);
 
   static constexpr int64_t kSnCkptInit = 0;
   static constexpr int64_t kSnFlushedInit = 0;
   static constexpr int64_t kUnsetMemberID = -1;
-  const std::string kKeyPrefix = "credis/";
-  const int kHeartbeatIntervalSec = 5;
-  const int kHeartbeatTimeoutSec = 20;
 
-  std::unique_ptr<etcd::EtcdClient> etcd_client_;
+  std::unique_ptr<etcd::Client> etcd_client_;
   std::shared_ptr<grpc::Channel> channel_;
   std::unique_ptr<std::thread> heartbeat_thread_;
   std::unique_ptr<std::thread> config_thread_;
