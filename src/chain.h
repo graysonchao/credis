@@ -5,7 +5,7 @@
 #include <boost/optional/optional.hpp>
 #include <string>
 #include <map>
-#include <unordered_map>
+#include <map>
 
 #ifndef CREDIS_CHAIN_H
 #define CREDIS_CHAIN_H
@@ -16,22 +16,22 @@ namespace chain {
     const std::string kRoleMiddle = "middle";
     const std::string kRoleSingleton = "singleton";
     const std::string kRoleUninitialized = "uninitialized";
-    const std::string kNoMember = "nil";
+    const int64_t kNoMember = -1;
 
     class MemberKey {
     public:
         explicit MemberKey(const std::string &_key_str);
         MemberKey(
-            const std::string &app_prefix,
-            const std::string &chain_id,
-            const std::string &member_id,
-            const std::string &type
+            std::string app_prefix,
+            std::string chain_id,
+            int64_t member_id,
+            std::string type
         );
         std::string ToString() const;
 
         std::string app_prefix;
         std::string chain_id;
-        std::string member_id;
+        int64_t member_id;
         std::string type;
     };
     class MemberConfig {
@@ -39,14 +39,14 @@ namespace chain {
         MemberConfig();
         explicit MemberConfig(const std::string &json_str);
         explicit MemberConfig(
-            const std::string &role,
-            const std::string &prev,
-            const std::string &next
+            std::string role,
+            int64_t prev,
+            int64_t next
         );
         std::string ToJSON() const;
         std::string role;
-        std::string prev;
-        std::string next;
+        int64_t prev;
+        int64_t next;
     };
     class MemberHeartbeat {
     public:
@@ -54,15 +54,15 @@ namespace chain {
         explicit MemberHeartbeat(const std::string &json_str);
         std::string ToJSON() const;
         std::string address;
-        std::string port;
+        int port;
         MemberConfig config;
     };
     class Member {
     public:
         Member();
-        explicit Member(std::string id);
-        Member(std::string id, MemberConfig config, MemberHeartbeat heartbeat);
-        std::string id;
+        explicit Member(int64_t id);
+        Member(int64_t id, MemberConfig config, MemberHeartbeat heartbeat);
+        int64_t id;
         boost::optional<MemberConfig> config;
         boost::optional<MemberHeartbeat> heartbeat;
     };
@@ -75,22 +75,25 @@ namespace chain {
     class Chain {
     public:
         Chain(
-            const std::string &app_prefix,
-            const std::string &chain_id,
-            std::unordered_map<std::string, std::string> initial_state
+            std::string app_prefix,
+            std::string chain_id,
+            std::map<std::string, std::string> initial_state
         );
-        void AddMember(const std::string &id, const std::string &hb_json);
-        std::vector<std::pair<std::string, std::string>> SerializedState() const;
-        void SetNext(const std::string &member_id, const std::string &next_id );
-        void SetPrev(const std::string &member_id, const std::string &prev_id );
-        void SetRole(const std::string &member_id, const std::string &role);
-        std::string ConfigPath(const std::string &member_id) const;
+        void AddMember(int64_t id, std::string hb_json);
+        std::vector<std::pair<std::string, std::string>> SerializedState();
+        void SetNext(int64_t member_id, int64_t next_id);
+        void SetPrev(int64_t member_id, int64_t prev_id);
+        void SetRole(int64_t member_id, std::string role);
+        std::string ConfigPath(int64_t member_id) const;
+        std::string HeartbeatPath(int64_t member_id) const;
+        std::vector<Member> EnforceChain();
+        std::string ToString();
 
-        std::unordered_map<std::string, Member> members;
+        std::map<int64_t, Member> members;
         std::string app_prefix;
         std::string id;
-        std::string head_id;
-        std::string tail_id;
+        int64_t head_id;
+        int64_t tail_id;
     };
 
 }

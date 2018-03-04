@@ -172,9 +172,9 @@ std::unique_ptr<UnlockResponse> etcd::Client::Unlock(
  * @return A response indicating success and the results of ops that were performed.
  */
 std::unique_ptr<TxnResponse> etcd::Client::Transaction(
-    const std::vector<Compare>& comparisons,
-    const std::vector<RequestOp>& success_ops,
-    const std::vector<RequestOp>& failure_ops
+    const std::vector<Compare> &comparisons,
+    const std::vector<RequestOp> &success_ops,
+    const std::vector<RequestOp> &failure_ops
 ) {
   grpc::Status status;
   grpc::ClientContext context;
@@ -275,6 +275,22 @@ std::unique_ptr<Compare> etcd::util::BuildKeyExistsComparison(
   return comparison;
 }
 
+/**
+ * Build a Compare object that checks if a key exists.
+ * @param key the key to check.
+ * @return
+ */
+std::unique_ptr<Compare> etcd::util::BuildKeyNotExistsComparison(
+    const std::string &key
+) {
+  auto comparison = std::unique_ptr<Compare>(new Compare());
+  comparison->set_result(Compare_CompareResult_LESS);
+  comparison->set_target(Compare_CompareTarget_CREATE);
+  comparison->set_key(key);
+  comparison->set_create_revision(1);
+  return comparison;
+}
+
 std::unique_ptr<RequestOp> etcd::util::BuildPutRequest(
     const std::string &key,
     const std::string &value
@@ -301,6 +317,16 @@ std::unique_ptr<RequestOp> etcd::util::BuildGetRequest(
 
   auto request_op = std::unique_ptr<RequestOp>(new RequestOp());
   request_op->set_allocated_request_range(rr);
+  return request_op;
+}
+
+std::unique_ptr<RequestOp> etcd::util::BuildDeleteRequest(const std::string &key) {
+  auto drr = new DeleteRangeRequest();
+  drr->set_key(key);
+  drr->set_range_end("");
+
+  auto request_op = std::unique_ptr<RequestOp>(new RequestOp());
+  request_op->set_allocated_request_delete_range(drr);
   return request_op;
 }
 

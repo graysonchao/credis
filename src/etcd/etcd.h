@@ -19,7 +19,7 @@ namespace etcd {
 
     class ClientInterface {
     public:
-        virtual ~ClientInterface() {};
+        virtual ~ClientInterface() = default;
         virtual std::unique_ptr<PutResponse> Put(
             std::string key,
             std::string value,
@@ -62,9 +62,9 @@ namespace etcd {
         virtual std::unique_ptr<UnlockResponse> Unlock(std::string lock_key) = 0;
 
         virtual std::unique_ptr<TxnResponse> Transaction(
-            const std::vector<Compare>& comparisons,
-            const std::vector<RequestOp>& success_ops,
-            const std::vector<RequestOp>& failure_ops
+            const std::vector<Compare> &comparisons,
+            const std::vector<RequestOp> &success_ops,
+            const std::vector<RequestOp> &failure_ops
         ) = 0;
     };
 
@@ -124,9 +124,9 @@ namespace etcd {
         std::unique_ptr<UnlockResponse> Unlock(std::string lock_key) override;
 
         std::unique_ptr<TxnResponse> Transaction(
-            const std::vector<Compare>& comparisons,
-            const std::vector<RequestOp>& success_ops,
-            const std::vector<RequestOp>& failure_ops
+            const std::vector<Compare> &comparisons,
+            const std::vector<RequestOp> &success_ops,
+            const std::vector<RequestOp> &failure_ops
         ) override;
 
     private:
@@ -140,6 +140,7 @@ namespace etcd {
     namespace util {
         // Helper functions for transactions
         std::unique_ptr<Compare> BuildKeyExistsComparison(const std::string &key);
+        std::unique_ptr<Compare> BuildKeyNotExistsComparison(const std::string &key);
         std::unique_ptr<RequestOp> BuildPutRequest(
             const std::string &key,
             const std::string &value
@@ -150,6 +151,7 @@ namespace etcd {
         );
         std::unique_ptr<RequestOp> BuildPutRequest(const std::string &key, const std::string &value);
         std::unique_ptr<RequestOp> BuildGetRequest(const std::string &key);
+        std::unique_ptr<RequestOp> BuildDeleteRequest(const std::string &key);
         std::string RangePrefix(const std::string &key);
     }
 }

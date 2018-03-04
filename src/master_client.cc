@@ -14,6 +14,7 @@
 using json = nlohmann::json;
 
 const std::string MasterClient::kKeyPrefix = "credis:";
+const std::string MasterClient::kNoAddress = "nil";
 const int MasterClient::kHeartbeatIntervalSec = 5;
 const int MasterClient::kHeartbeatTimeoutSec = 20;
 const int kHeartbeatBackoffMultiplier = 2;
@@ -146,6 +147,28 @@ void MasterClient::StartHeartbeat() {
           auto etcd = std::unique_ptr<etcd::Client>(new etcd::Client(channel_));
           while (true) {
             etcd->LeaseKeepAlive(lease_id);
+            if (member_id_ != kUnsetMemberID) {
+              std::vector<Compare> comparisons = {
+                  *etcd::util::BuildKeyNotExistsComparison(HeartbeatKey(chain_id_, member_id_))
+              };
+              std::vector<RequestOp> success_ops = {
+                  *etcd::util::BuildPutRequest(
+                      HeartbeatKey(chain_id_, member_id_),
+                      json {
+                          {"address", redis_addr_},
+                          {"port", redis_port_},
+                          {"prev", prev_id_},
+                          {"next", next_id_},
+                          {"role", role_}
+                      }.dump()
+                  )};
+              std::vector<RequestOp> failure_ops = {};
+              etcd->Transaction(
+                  comparisons,
+                  success_ops,
+                  failure_ops
+              );
+            }
             std::this_thread::sleep_for(std::chrono::seconds(hb_interval));
           }
       },
@@ -215,7 +238,7 @@ void MasterClient::AcquireID() {
 void MasterClient::RegisterMemberInfo() {
   json my_conn_info = {
       {"address", redis_addr_},
-      {"port", std::to_string(redis_port_)},
+      {"port", redis_port_},
       {"prev", prev_id_},
       {"next", next_id_},
       {"role", role_}
@@ -280,20 +303,20 @@ void MasterClient::StartWatchingConfig() {
 void MasterClient::HandleConfigPut(Event put_event, std::shared_ptr<etcd::Client> etcd) {
   CHECK(put_event.type() == Event_EventType_PUT) << "HandleConfigPut must be called on a PUT event";
   auto my_config = json::parse(put_event.kv().value());
-  std::string my_role = my_config["role"];
-  std::string prev_id = my_config["prev"];
-  std::string next_id = my_config["next"];
+  std::string role = my_config["role"];
+  int64_t prev_id = my_config["prev"];
+  int64_t next_id = my_config["next"];
 
-  if (my_role == chain::kRoleSingleton) {
+  if (role == chain::kRoleSingleton) {
     auto redisCtx = std::unique_ptr<redisContext>(redisConnect(redis_addr_.c_str(), redis_port_));
     redisReply* reply = reinterpret_cast<redisReply*>(redisCommand(
         redisCtx.get(),
         "MEMBER.SET_ROLE %s %s %s %s %s %s %s",
-        my_role.c_str(),
-        chain::kNoMember.c_str(),
-        chain::kNoMember.c_str(),
-        chain::kNoMember.c_str(),
-        chain::kNoMember.c_str(),
+        role.c_str(),
+        std::to_string(chain::kNoMember).c_str(),
+        std::to_string(chain::kNoMember).c_str(),
+        std::to_string(chain::kNoMember).c_str(),
+        std::to_string(chain::kNoMember).c_str(),
         "-1",
         "0"
     ));
@@ -302,28 +325,28 @@ void MasterClient::HandleConfigPut(Event put_event, std::shared_ptr<etcd::Client
   }
 
   // Arguments to MEMBER.SET_ROLE.
-  std::string prev_address = chain::kNoMember;
-  std::string next_address = chain::kNoMember;
-  std::string prev_port = chain::kNoMember;
-  std::string next_port = chain::kNoMember;
+  std::string prev_address = kNoAddress;
+  std::string next_address = kNoAddress;
+  int prev_port = 0;
+  int next_port = 0;
   std::string sn_string = "-1";
-  std::string drop_writes_string = "0";
+  std::string drop_writes = "0";
 
   // Build and run an etcd transaction to get reported config of the new head and new tail.
   // If a heartbeat key we expected to be there doesn't exist, the transaction will not succeed.
   std::vector<Compare> comparisons;
   std::vector<RequestOp> success_ops;
   std::vector<RequestOp> failure_ops = {};
-  bool has_next = (my_role != chain::kRoleTail && my_role != chain::kRoleSingleton);
-  bool has_prev = (my_role != chain::kRoleHead && my_role != chain::kRoleSingleton);
+  bool has_next = (role != chain::kRoleTail && role != chain::kRoleSingleton);
+  bool has_prev = (role != chain::kRoleHead && role != chain::kRoleSingleton);
   std::string prev_hb_key, next_hb_key;
   if (has_next) {
-    next_hb_key = HeartbeatKey(chain_id_, std::stol(next_id));
+    next_hb_key = HeartbeatKey(chain_id_, next_id);
     comparisons.push_back(*etcd::util::BuildKeyExistsComparison(next_hb_key));
     success_ops.push_back(*etcd::util::BuildGetRequest(next_hb_key));
   }
   if (has_prev) {
-    prev_hb_key = HeartbeatKey(chain_id_, std::stol(prev_id));
+    prev_hb_key = HeartbeatKey(chain_id_, prev_id);
     comparisons.push_back(*etcd::util::BuildKeyExistsComparison(prev_hb_key));
     success_ops.push_back(*etcd::util::BuildGetRequest(prev_hb_key));
   }
@@ -346,6 +369,9 @@ void MasterClient::HandleConfigPut(Event put_event, std::shared_ptr<etcd::Client
     LOG(INFO) << "Attempt to read new config failed. Is the new parent or new child down?";
   }
 
+  // Set my own role by sending myself a Redis command.
+  redisContext* redis_ctx = redisConnect(redis_addr_.c_str(), redis_port_);
+
   // Block until the new successor updates its reported state.
   if (has_next) {
     backoff::ExponentialBackoff(
@@ -353,7 +379,7 @@ void MasterClient::HandleConfigPut(Event put_event, std::shared_ptr<etcd::Client
           auto next_config_req = etcd->Range(next_hb_key, "", -1);
           if (next_config_req->kvs_size() > 0) {
             auto next_config = json::parse(next_config_req->kvs().Get(0).value());
-            if (next_config["prev"] == std::to_string(member_id_)) {
+            if (next_config["prev"] == member_id_) {
               LOG(INFO) << "New child reports us as its parent - forwarding writes...";
               return true;
             }
@@ -368,28 +394,35 @@ void MasterClient::HandleConfigPut(Event put_event, std::shared_ptr<etcd::Client
     );
   }
 
-  // Set my own role by sending myself a Redis command.
-  redisContext* redis_ctx = redisConnect(redis_addr_.c_str(), redis_port_);
-  auto reply = reinterpret_cast<redisReply*>(redisCommand(
+  auto set_role = reinterpret_cast<redisReply*>(redisCommand(
       redis_ctx,
       "MEMBER.SET_ROLE %s %s %s %s %s %s %s",
-      my_role.c_str(),
+      role.c_str(),
       prev_address.c_str(),
-      prev_port.c_str(),
+      std::to_string(prev_port).c_str(),
       next_address.c_str(),
-      next_port.c_str(),
+      std::to_string(next_port).c_str(),
       sn_string.c_str(),
-      drop_writes_string.c_str()
+      drop_writes.c_str()
   ));
+  freeReplyObject(set_role);
+  CHECK(redis_ctx->err == REDIS_OK) << "MEMBER.SET_ROLE failed with error: " << redis_ctx->errstr;
+  if (has_next) {
+    LOG(INFO) << "Enabling replication.";
+    auto replicate = reinterpret_cast<redisReply*>(
+        redisCommand(redis_ctx, "MEMBER.REPLICATE"));
+    freeReplyObject(replicate);
+    CHECK(redis_ctx->err == REDIS_OK) << "MEMBER.REPLICATE failed with error: " << redis_ctx->errstr;
 
-  // If we were able to successfully set our own role, then update our config in etcd.
-  if (redis_ctx->err == 0) {
-    role_ = my_role;
-    prev_id_ = prev_id;
-    next_id_ = next_id;
-    RegisterMemberInfo();
-  } else {
-    LOG(INFO) << "MEMBER.SET_ROLE failed with error: " << redis_ctx->errstr;
+    // Let writes flow through.
+    auto unblock_writes = reinterpret_cast<redisReply*>(
+        redisCommand(redis_ctx, "MEMBER.UNBLOCK_WRITES"));
+    freeReplyObject(unblock_writes);
+    CHECK(redis_ctx->err == REDIS_OK) << "MEMBER.UNBLOCK_WRITES failed with error: " << redis_ctx->errstr;
   }
-  freeReplyObject(reply);
+
+  role_ = role;
+  prev_id_ = prev_id;
+  next_id_ = next_id;
+  RegisterMemberInfo();
 }

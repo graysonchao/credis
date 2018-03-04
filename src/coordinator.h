@@ -11,6 +11,8 @@
 
 using namespace chain;
 
+typedef grpc::ClientReaderWriterInterface<WatchRequest, WatchResponse> SyncWatchStream;
+
 class Coordinator {
 public:
     struct Options {
@@ -20,19 +22,23 @@ public:
     Coordinator(std::unique_ptr<etcd::ClientInterface> etcd, Options options);
     std::unique_ptr<grpc::Status> Connect(const std::string& address, int port);
     void ManageChain(std::string chain_id);
-    void HandleHeartbeatExpired(
-        Chain &chain,
-        const std::string &failed_id
-    );
     void ListenForChanges(
         const std::string& chain_id,
         const RangeResponse &initial_state
     );
-    void FlushChain(const chain::Chain &chain);
-    void HandleNodeJoin(
+    int64_t FlushChain(chain::Chain &chain);
+    int64_t HandleNodeJoin(
         Chain &chain,
-        const std::string &new_id,
+        int64_t new_id,
         const std::string &new_hb_str
+    );
+    int64_t HandleHeartbeatExpired(
+        Chain &chain,
+        int64_t failed_id
+    );
+    std::unique_ptr<SyncWatchStream> WatchFromRevision(
+        std::string chain_id,
+        int start_revision
     );
 
 private:

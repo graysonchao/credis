@@ -175,10 +175,12 @@ class RedisChainModule {
 
     child_ = NULL;
     parent_ = NULL;
-    if (next_address != chain::kNoMember) {
+    if (next_address != "nil") {
+      LOG(INFO) << "Connecting to next: " << next_address << ":" << next_port;
       child_ = AsyncConnect(next_address, std::stoi(next_port));
     }
-    if (prev_address != chain::kNoMember) {
+    if (prev_address != "nil") {
+      LOG(INFO) << "Connecting to prev: " << prev_address << ":" << prev_port;
       parent_ = AsyncConnect(prev_address, std::stoi(prev_port));
     }
   }
@@ -542,7 +544,6 @@ int MemberSetRole_RedisCommand(RedisModuleCtx* ctx,
 
   // Send all the sns that the new successor might not have received.
   // Preserves the Update Propagation Invariant ("Failure of Other Servers" in CR paper)
-  // The list of sns being iterated is all the ones the new next might not have received.
   if (module.child()) {
     for (auto i = module.sn_to_key().find(first_sn);
          i != module.sn_to_key().end(); ++i) {

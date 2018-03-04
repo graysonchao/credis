@@ -69,6 +69,7 @@ class MasterClient {
   static const int kHeartbeatIntervalSec;// = 5;
   static const int kHeartbeatTimeoutSec;// = 20;
   static const int kHeartbeatBackoffMultiplier;// = 2;
+  static const std::string kNoAddress;// = "nil";
 
  private:
   const std::string WatermarkKey(std::string chain_id, Watermark w) const;
@@ -95,8 +96,8 @@ class MasterClient {
   int64_t heartbeat_lease_id_;
   int64_t member_id_ = kUnsetMemberID;
   std::string role_ = "uninitialized";
-  std::string prev_id_ = "-1";
-  std::string next_id_ = "-1";
+  int64_t prev_id_ = kUnsetMemberID;
+  int64_t next_id_ = kUnsetMemberID;
   std::string redis_addr_;
   int redis_port_;
 
