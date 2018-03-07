@@ -1,4 +1,5 @@
 include_directories(${CMAKE_SOURCE_DIR})
+include_directories(${CMAKE_SOURCE_DIR}/thirdparty/pkg)
 include_directories(${CMAKE_SOURCE_DIR}/redis/src/)
 include_directories(${CMAKE_SOURCE_DIR}/redis/deps/)
 
@@ -37,8 +38,7 @@ else()
 endif()
 
 # Protobufs types.
-# file(GLOB PB_SOURCES "${CMAKE_SOURCE_DIR}/protos/src/*" rpc.*)
-set(PROTO_SRC_DIR "${CMAKE_SOURCE_DIR}/protos/src")
+set(PROTO_SRC_DIR "${CMAKE_SOURCE_DIR}/thirdparty/etcd_grpc/src")
 set(PB_SOURCES
     "${PROTO_SRC_DIR}/auth.grpc.pb.cc"
     "${PROTO_SRC_DIR}/auth.pb.cc"
@@ -128,28 +128,28 @@ target_link_libraries(run_coordinator etcd)
 target_link_libraries(run_coordinator coordinator)
 
 # Benchmarks.
-add_executable(credis_parput_bench credis_parput_bench.cc)
+add_executable(credis_parput_bench benchmarks/credis_parput_bench.cc)
 target_link_libraries(credis_parput_bench glog::glog client
   ${CMAKE_SOURCE_DIR}/redis/deps/hiredis/libhiredis.a
   ${CMAKE_SOURCE_DIR}/redis/src/ae.o
   ${CMAKE_SOURCE_DIR}/redis/src/zmalloc.o
   ${MALLOC_LIBRARY} timer)
 
-add_executable(credis_seqput_bench credis_seqput_bench.cc)
+add_executable(credis_seqput_bench benchmarks/credis_seqput_bench.cc)
 target_link_libraries(credis_seqput_bench glog::glog client
   ${CMAKE_SOURCE_DIR}/redis/deps/hiredis/libhiredis.a
   ${CMAKE_SOURCE_DIR}/redis/src/ae.o
   ${CMAKE_SOURCE_DIR}/redis/src/zmalloc.o
   ${MALLOC_LIBRARY} timer)
 
-add_executable(redis_parput_bench redis_parput_bench.cc)
+add_executable(redis_parput_bench benchmarks/redis_parput_bench.cc)
 target_link_libraries(redis_parput_bench glog::glog client
   ${CMAKE_SOURCE_DIR}/redis/deps/hiredis/libhiredis.a
   ${CMAKE_SOURCE_DIR}/redis/src/ae.o
   ${CMAKE_SOURCE_DIR}/redis/src/zmalloc.o
   ${MALLOC_LIBRARY} timer)
 
-add_executable(redis_seqput_bench redis_seqput_bench.cc)
+add_executable(redis_seqput_bench benchmarks/redis_seqput_bench.cc)
 target_link_libraries(redis_seqput_bench glog::glog client
   ${CMAKE_SOURCE_DIR}/redis/deps/hiredis/libhiredis.a
   ${CMAKE_SOURCE_DIR}/redis/src/ae.o

@@ -9,16 +9,17 @@ git submodule update
 # Install tcmalloc according to
 # https://github.com/gperftools/gperftools/blob/master/INSTALL
 
+# You must have protobuf-cpp installed. If you don't, see:
+# https://github.com/google/protobuf/blob/master/src/README.md
+
+pushd third_party;
 pushd redis && env USE_TCMALLOC=yes make -j && popd
 pushd glog && cmake . && make -j install && popd
 pushd leveldb && make -j && popd
+pushd grpc && git submodule update --init && make -j && make -j install && popd
+popd third_party;
 
 # Generate protobufs source files for etcd.
-# You must have grpc, protobufs, and protobuf-c installed.
-# https://github.com/grpc/grpc/blob/master/INSTALL.md
-# https://github.com/google/protobuf/blob/master/src/README.md
-# https://github.com/protobuf-c/protobuf-c/blob/master/README.md
-# protobuf-c is to support building pure-C Protobufs symbols for Redis modules.
 pushd protos && make && popd
 
 mkdir build; cd build
@@ -27,10 +28,10 @@ make -j
 ```
 
 ## Setting up etcd
-Use the Procfile script. It starts up a 3-node etcd cluster. You can use foreman, goreman, or whatever foreman implementation.
+The simplest way to set up etcd for local testing is with Docker. Any stock image will do.
+The conventional etcd client request port is 2379.
 ```
-go get github.com/mattn/goreman
-goreman start
+docker run -d -p 2379:2379 -p 2380:2380 appcelerator/etcd
 ```
 
 ## Trying it out

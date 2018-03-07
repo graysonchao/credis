@@ -1,7 +1,7 @@
 syntax = "proto3";
 package v3lockpb;
-
 import "rpc.proto";
+// for grpc-gateway
 
 // The lock service exposes client-side locking facilities as a gRPC interface.
 service Lock {
@@ -11,14 +11,12 @@ service Lock {
   // transactions to safely ensure updates to etcd only occur while holding
   // lock ownership. The lock is held until Unlock is called on the key or the
   // lease associate with the owner expires.
-  rpc Lock(LockRequest) returns (LockResponse) {}
-
+  rpc Lock(LockRequest) returns (LockResponse) { }
 
   // Unlock takes a key returned by Lock and releases the hold on lock. The
   // next Lock caller waiting for the lock will then be woken up and given
   // ownership of the lock.
-  rpc Unlock(UnlockRequest) returns (UnlockResponse) {}
-
+  rpc Unlock(UnlockRequest) returns (UnlockResponse) { }
 }
 
 message LockRequest {
@@ -27,7 +25,7 @@ message LockRequest {
   // lease is the ID of the lease that will be attached to ownership of the
   // lock. If the lease expires or is revoked and currently holds the lock,
   // the lock is automatically released. Calls to Lock with the same lease will
-  // be treated as a single acquisition; locking twice with the same lease is a
+  // be treated as a single acquistion; locking twice with the same lease is a
   // no-op.
   int64 lease = 2;
 }
@@ -48,3 +46,4 @@ message UnlockRequest {
 message UnlockResponse {
   etcdserverpb.ResponseHeader header = 1;
 }
+

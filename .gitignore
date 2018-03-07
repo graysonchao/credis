@@ -52,4 +52,7 @@ build/
 .idea
 
 # Compiled (from .proto to .cc/.h) protobufs sources
-protos/src
+protos/src/
+
+# Third party dependencies, should be built locally not checked in
+thirdparty/pkg
