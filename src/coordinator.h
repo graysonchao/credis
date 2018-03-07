@@ -11,8 +11,6 @@
 
 using namespace chain;
 
-typedef grpc::ClientReaderWriterInterface<WatchRequest, WatchResponse> SyncWatchStream;
-
 class Coordinator {
 public:
     struct Options {
@@ -26,7 +24,7 @@ public:
         const std::string& chain_id,
         const RangeResponse &initial_state
     );
-    int64_t FlushChain(chain::Chain &chain);
+    int64_t WriteChain(chain::Chain& chain);
     int64_t HandleNodeJoin(
         Chain &chain,
         int64_t new_id,
@@ -36,7 +34,7 @@ public:
         Chain &chain,
         int64_t failed_id
     );
-    std::unique_ptr<SyncWatchStream> WatchFromRevision(
+    etcd::WatchStreamPtr WatchFromRevision(
         std::string chain_id,
         int start_revision
     );

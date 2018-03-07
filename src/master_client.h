@@ -27,6 +27,16 @@ class MasterClient {
     kSnFlushed = 1,
   };
 
+  // Options for setting the role of a member
+  struct RoleOptions {
+    std::string role;
+    std::string next_address;
+    int next_port;
+    std::string prev_address;
+    int prev_port;
+    int sn;
+    bool drop_writes;
+  };
 
   /**
    * Connect to the master, and join the specified chain.
@@ -82,13 +92,18 @@ class MasterClient {
   void RegisterMemberInfo();
   void StartWatchingConfig();
 
-  void HandleConfigPut(Event e, std::shared_ptr<etcd::Client> etcd);
+  void Heartbeat(std::shared_ptr<etcd::Client> etcd);
+  void SetOwnRole(const RoleOptions& options);
+  void EnableReplication();
+  void UnblockWrites();
+  void HandleConfigPut(Event e);
+  void WaitForNewChild(int64_t child_id);
 
   static constexpr int64_t kSnCkptInit = 0;
   static constexpr int64_t kSnFlushedInit = 0;
   static constexpr int64_t kUnsetMemberID = -1;
 
-  std::unique_ptr<etcd::Client> etcd_client_;
+  std::unique_ptr<etcd::Client> etcd_;
   std::shared_ptr<grpc::Channel> channel_;
   std::unique_ptr<std::thread> heartbeat_thread_;
   std::unique_ptr<std::thread> config_thread_;
@@ -100,7 +115,6 @@ class MasterClient {
   int64_t next_id_ = kUnsetMemberID;
   std::string redis_addr_;
   int redis_port_;
-
 };
 
 enum class ChainRole : int {

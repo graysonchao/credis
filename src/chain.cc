@@ -256,6 +256,9 @@ void Chain::SetRole(int64_t member_id, std::string role) {
     LOG(INFO) << "Tried to set role for a nonexistent member ID, " << member_id;
   }
 }
+bool Chain::HasMember(int64_t id) {
+  return members.find(id) != members.end();
+}
 
 /**
  * Represents a key describing a member.
@@ -346,7 +349,6 @@ Member::Member(int64_t id, MemberConfig config, MemberHeartbeat heartbeat)
 Member::Member(): id(kNoMember) { }
 
 
-// TODO: I'm homeless!
 /**
  * Repeatedly try to call JOB with exponential backoff, returning true if successful.
  * The actual timeout is not guaranteed to be exactly the timeout given.

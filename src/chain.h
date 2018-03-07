@@ -88,6 +88,7 @@ namespace chain {
         std::string HeartbeatPath(int64_t member_id) const;
         std::vector<Member> EnforceChain();
         std::string ToString();
+        bool HasMember(int64_t id);
 
         std::map<int64_t, Member> members;
         std::string app_prefix;

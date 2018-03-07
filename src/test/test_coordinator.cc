@@ -19,31 +19,25 @@ namespace {
     }
 
     class MockClient : public ::etcd::ClientInterface {
-    public:
-        MOCK_METHOD6(Put, std::unique_ptr<PutResponse>(std::string, std::string, int64_t, bool, bool, bool));
-        MOCK_METHOD3(Range,
-                     std::unique_ptr<RangeResponse>(const std::string&, const std::string&, int64_t));
-        MOCK_METHOD4(Range,
-                     std::unique_ptr<RangeResponse>(const std::string &key, const std::string &range_end, int64_t revision, grpc::Status &status));
-        MOCK_METHOD6(WatchCreate,
-                     std::unique_ptr<grpc::ClientReaderWriterInterface<WatchRequest, WatchResponse>>(const std::string &key, const std::string &range_end, int64_t start_revision, bool progress_notify, std::vector<WatchCreateRequest_FilterType> filters, bool prev_kv));
-        MOCK_METHOD1(WatchCancel,
-                     void(int64_t watch_id));
-        MOCK_METHOD2(LeaseGrant,
-                     std::unique_ptr<LeaseGrantResponse>(int64_t, int64_t));
-        MOCK_METHOD1(LeaseKeepAlive,
-                     std::unique_ptr<LeaseKeepAliveResponse>(int64_t id));
-        MOCK_METHOD2(Lock,
-                     std::unique_ptr<LockResponse>(std::string lock_name, int64_t lease_id));
-        MOCK_METHOD1(Unlock,
-                     std::unique_ptr<UnlockResponse>(std::string lock_key));
-
-        std::unique_ptr<TxnResponse> Transaction(const std::vector<Compare>& comparisons, const std::vector<RequestOp>& success_ops, const std::vector<RequestOp>& failure_ops) {
-          return std::unique_ptr<TxnResponse>(Transaction_(comparisons, success_ops, failure_ops));
-        }
-
-        MOCK_METHOD3(Transaction_,
-                     TxnResponse*(const std::vector<Compare>& comparisons, const std::vector<RequestOp>& success_ops, const std::vector<RequestOp>& failure_ops));
+     public:
+      MOCK_METHOD2(Put,
+                   grpc::Status(const PutRequest &req, PutResponse *res));
+      MOCK_METHOD2(Range,
+                   grpc::Status(const RangeRequest &request, RangeResponse *response));
+      MOCK_METHOD2(MakeWatchStream,
+                   etcd::WatchStreamPtr(const WatchRequest& req, WatchResponse* res));
+      MOCK_METHOD1(WatchCancel,
+                   void(int64_t watch_id));
+      MOCK_METHOD2(LeaseGrant,
+                   grpc::Status(const LeaseGrantRequest &req, LeaseGrantResponse *res));
+      MOCK_METHOD2(LeaseKeepAlive,
+                   grpc::Status(const LeaseKeepAliveRequest &req, LeaseKeepAliveResponse *res));
+      MOCK_METHOD2(Lock,
+                   grpc::Status(const LockRequest &req, LockResponse *res));
+      MOCK_METHOD2(Unlock,
+                   grpc::Status(const UnlockRequest &req, UnlockResponse *res));
+      MOCK_METHOD2(Transaction,
+                   grpc::Status(const TxnRequest &req, TxnResponse *res));
     };
 
     class CoordinatorTest : public ::testing::Test {
@@ -101,33 +95,10 @@ namespace {
         std::unique_ptr<::chain::Chain> chain_of_three_;
     };
 
-    TEST_F(CoordinatorTest, TestFlushChain) {
-      auto mock_client = std::unique_ptr<etcd::ClientInterface>(new MockClient());
-      auto raw_client_ptr = (MockClient*) mock_client.get();
-      auto tx = SuccessTx();
-      ON_CALL(*raw_client_ptr, Transaction_(_,_,_))
-          .WillByDefault(Return(tx));
-      auto m1_req = *etcd::util::BuildPutRequest(m1_config_key_, m1_config_json_);
-      auto m2_req = *etcd::util::BuildPutRequest(m2_config_key_, m2_config_json_);
-      auto m3_req = *etcd::util::BuildPutRequest(m3_config_key_, m3_config_json_);
-      EXPECT_CALL(
-          *raw_client_ptr,
-          Transaction_(
-              _,
-              UnorderedElementsAre(PBEq(m1_req), PBEq(m2_req), PBEq(m3_req)),
-              _
-          )
-      );
-      Coordinator c(std::move(mock_client));
-      c.FlushChain(*chain_of_three_);
-    }
-
     TEST_F(CoordinatorTest, TestHeartbeatExpired_Head) {
       auto mock_client = std::unique_ptr<etcd::ClientInterface>(new MockClient());
       auto raw_client_ptr = (MockClient*) mock_client.get();
       auto tx = SuccessTx();
-      ON_CALL(*raw_client_ptr, Transaction_(_,_,_))
-              .WillByDefault(Return(tx));
       Coordinator c(std::move(mock_client));
       c.HandleHeartbeatExpired(*chain_of_three_, 1);
       EXPECT_EQ(chain_of_three_->head_id,  2);
@@ -145,8 +116,6 @@ namespace {
       auto mock_client = std::unique_ptr<etcd::ClientInterface>(new MockClient());
       auto raw_client_ptr = (MockClient*) mock_client.get();
       auto tx = SuccessTx();
-      ON_CALL(*raw_client_ptr, Transaction_(_,_,_))
-          .WillByDefault(Return(tx));
       Coordinator c(std::move(mock_client));
       c.HandleHeartbeatExpired(*chain_of_three_, 3);
       EXPECT_EQ(chain_of_three_->head_id,  1);
@@ -164,8 +133,6 @@ namespace {
       auto mock_client = std::unique_ptr<etcd::ClientInterface>(new MockClient());
       auto raw_client_ptr = (MockClient*) mock_client.get();
       auto tx = SuccessTx();
-      ON_CALL(*raw_client_ptr, Transaction_(_,_,_))
-          .WillByDefault(Return(tx));
       Coordinator c(std::move(mock_client));
       c.HandleHeartbeatExpired(*chain_of_three_, 2);
       EXPECT_EQ(chain_of_three_->head_id,  1);
@@ -183,8 +150,6 @@ namespace {
       auto mock_client = std::unique_ptr<etcd::ClientInterface>(new MockClient());
       auto raw_client_ptr = (MockClient*) mock_client.get();
       auto tx = SuccessTx();
-      ON_CALL(*raw_client_ptr, Transaction_(_,_,_))
-          .WillByDefault(Return(tx));
       Coordinator c(std::move(mock_client));
       chain::Chain c1("test", "test", {});
       c1.AddMember(1, MemberHeartbeat().ToJSON());
@@ -196,8 +161,6 @@ namespace {
       auto mock_client = std::unique_ptr<etcd::ClientInterface>(new MockClient());
       auto raw_client_ptr = (MockClient*) mock_client.get();
       auto tx = SuccessTx();
-      ON_CALL(*raw_client_ptr, Transaction_(_,_,_))
-          .WillByDefault(Return(tx));
       Coordinator c(std::move(mock_client));
       c.HandleHeartbeatExpired(*chain_of_three_, -37);
       EXPECT_EQ(chain_of_three_->members.size(), 3);
@@ -207,8 +170,6 @@ namespace {
       auto mock_client = std::unique_ptr<etcd::ClientInterface>(new MockClient());
       auto raw_client_ptr = (MockClient*) mock_client.get();
       auto tx = SuccessTx();
-      ON_CALL(*raw_client_ptr, Transaction_(_,_,_))
-          .WillByDefault(Return(tx));
       Coordinator c(std::move(mock_client));
       MemberHeartbeat new_hb(
           json {
@@ -245,8 +206,6 @@ namespace {
       auto mock_client = std::unique_ptr<etcd::ClientInterface>(new MockClient());
       auto raw_client_ptr = (MockClient*) mock_client.get();
       auto tx = SuccessTx();
-      ON_CALL(*raw_client_ptr, Transaction_(_,_,_))
-          .WillByDefault(Return(tx));
       Coordinator c(std::move(mock_client));
       MemberHeartbeat new_hb(
           json {
@@ -279,8 +238,6 @@ namespace {
       auto mock_client = std::unique_ptr<etcd::ClientInterface>(new MockClient());
       auto raw_client_ptr = (MockClient*) mock_client.get();
       auto tx = SuccessTx();
-      ON_CALL(*raw_client_ptr, Transaction_(_,_,_))
-          .WillByDefault(Return(tx));
       Coordinator c(std::move(mock_client));
       MemberHeartbeat new_hb(
           json {

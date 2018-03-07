@@ -15,147 +15,128 @@ using namespace etcdserverpb;
 using namespace v3lockpb;
 using namespace mvccpb;
 
+using std::string;
+
 namespace etcd {
 
-    class ClientInterface {
-    public:
-        virtual ~ClientInterface() = default;
-        virtual std::unique_ptr<PutResponse> Put(
-            std::string key,
-            std::string value,
-            int64_t lease = 0,
-            bool prev_key = false,
-            bool ignore_value = false,
-            bool ignore_lease = false
-        ) = 0;
+typedef std::unique_ptr<
+    grpc::ClientReaderWriterInterface<WatchRequest, WatchResponse>>
+    WatchStreamPtr;
 
-        virtual std::unique_ptr<RangeResponse> Range(
-            const std::string &key,
-            const std::string &range_end,
-            int64_t revision = -1
-        ) = 0;
-        virtual std::unique_ptr<RangeResponse> Range(
-            const std::string &key,
-            const std::string &range_end,
-            int64_t revision,
-            grpc::Status &status
-        ) = 0;
+// A thin client wrapper for the etcd3 grpc interface.
+class ClientInterface {
+ public:
+  ClientInterface() {}
 
-        virtual std::unique_ptr<grpc::ClientReaderWriterInterface<WatchRequest, WatchResponse>>
-        WatchCreate(
-            const std::string &key,
-            const std::string &range_end,
-            int64_t start_revision,
-            bool progress_notify,
-            std::vector<WatchCreateRequest_FilterType> filters,
-            bool prev_kv
-        ) = 0;
-        virtual void WatchCancel(int64_t watch_id) = 0;
+  virtual ~ClientInterface() = default;
 
-        virtual std::unique_ptr<LeaseGrantResponse> LeaseGrant(
-            int64_t requested_ttl,
-            int64_t requested_id = 0
-        ) = 0;
-        virtual std::unique_ptr<LeaseKeepAliveResponse> LeaseKeepAlive(int64_t id) = 0;
+  virtual grpc::Status Put(const PutRequest &req, PutResponse *res) = 0;
 
-        virtual std::unique_ptr<LockResponse> Lock(std::string lock_name, int64_t lease_id) = 0;
-        virtual std::unique_ptr<UnlockResponse> Unlock(std::string lock_key) = 0;
+  // Get a range of keys, which can also be a single key or the set of all keys
+  // matching a prefix.
+  virtual grpc::Status Range(const RangeRequest &request,
+                             RangeResponse *response) = 0;
 
-        virtual std::unique_ptr<TxnResponse> Transaction(
-            const std::vector<Compare> &comparisons,
-            const std::vector<RequestOp> &success_ops,
-            const std::vector<RequestOp> &failure_ops
-        ) = 0;
-    };
+  // Create a watch stream, which is a bidirectional GRPC stream where the
+  // client receives all change events to the requested keys.
+  virtual WatchStreamPtr MakeWatchStream(const WatchRequest& req,
+                                         WatchResponse* res) = 0;
 
-    class Client : public ClientInterface {
-    public:
-        explicit Client(std::shared_ptr<grpc::ChannelInterface> channel);
-        Client(
-            std::shared_ptr<KV::StubInterface> kv_stub,
-            std::shared_ptr<Watch::StubInterface> watch_stub,
-            std::shared_ptr<Lease::StubInterface> lease_stub,
-            std::shared_ptr<Lock::StubInterface> lock_stub
-        );
+  virtual void WatchCancel(int64_t watch_id) = 0;
 
-        std::unique_ptr<PutResponse> Put(
-            std::string key,
-            std::string value,
-            // TODO: move default params to etcd.cc so that includer sees the default
-            int64_t lease = 0,
-            bool prev_key = false,
-            bool ignore_value = false,
-            bool ignore_lease = false
-        ) override;
+  // Request a lease, which is a session with etcd kept alive by
+  // LeaseKeepAlive requests. It can be associated with keys and locks to
+  // delete or release them when the session times out, respectively.
+  virtual grpc::Status LeaseGrant(const LeaseGrantRequest &req,
+                                  LeaseGrantResponse *res) = 0;
 
-        std::unique_ptr<RangeResponse> Range(
-            const std::string &key,
-            const std::string &range_end,
-            int64_t revision = -1
-        ) override;
-        std::unique_ptr<RangeResponse> Range(
-            const std::string &key,
-            const std::string &range_end,
-            int64_t revision,
-            grpc::Status &status
-        ) override;
+  virtual grpc::Status LeaseKeepAlive(const LeaseKeepAliveRequest &req,
+                                      LeaseKeepAliveResponse *res) = 0;
 
-        std::unique_ptr<grpc::ClientReaderWriterInterface<WatchRequest, WatchResponse>>
-          WatchCreate(
-            const std::string &key,
-            const std::string &range_end,
-            int64_t start_revision,
-            bool progress_notify,
-            std::vector<WatchCreateRequest_FilterType> filters,
-            bool prev_kv
-        ) override;
+  virtual grpc::Status Lock(const LockRequest &req, LockResponse *res) = 0;
 
-        void WatchCancel(int64_t watch_id) override;
+  virtual grpc::Status Unlock(const UnlockRequest &req,
+                              UnlockResponse *res) = 0;
 
-        std::unique_ptr<LeaseGrantResponse> LeaseGrant(
-            int64_t requested_ttl,
-            int64_t requested_id = 0
-        ) override;
+  // Perform a transaction, which is a set of boolean predicates and two sets
+  // of operations: one set to do if the predicates are all true, and one set
+  // to do otherwise.
+  virtual grpc::Status Transaction(const TxnRequest &req, TxnResponse *res) = 0;
+};
 
-        std::unique_ptr<LeaseKeepAliveResponse> LeaseKeepAlive(int64_t id) override;
+class Client : public ClientInterface {
+ public:
+  explicit Client(std::shared_ptr<grpc::ChannelInterface> channel);
 
-        std::unique_ptr<LockResponse> Lock(std::string lock_name, int64_t lease_id) override;
+  Client(std::shared_ptr<KV::StubInterface> kv_stub,
+         std::shared_ptr<Watch::StubInterface> watch_stub,
+         std::shared_ptr<Lease::StubInterface> lease_stub,
+         std::shared_ptr<Lock::StubInterface> lock_stub);
 
-        std::unique_ptr<UnlockResponse> Unlock(std::string lock_key) override;
+  grpc::Status Put(const PutRequest &request, PutResponse *response) override;
 
-        std::unique_ptr<TxnResponse> Transaction(
-            const std::vector<Compare> &comparisons,
-            const std::vector<RequestOp> &success_ops,
-            const std::vector<RequestOp> &failure_ops
-        ) override;
+  grpc::Status Range(const RangeRequest& request,
+                     RangeResponse* response) override;
 
-    private:
-        // Shared for mocking.
-        std::shared_ptr<KV::StubInterface> kv_stub_;
-        std::shared_ptr<Watch::StubInterface> watch_stub_;
-        std::shared_ptr<Lease::StubInterface> lease_stub_;
-        std::shared_ptr<Lock::StubInterface> lock_stub_;
-    };
+  WatchStreamPtr MakeWatchStream(const WatchRequest& req,
+                                 WatchResponse* res) override;
 
-    namespace util {
-        // Helper functions for transactions
-        std::unique_ptr<Compare> BuildKeyExistsComparison(const std::string &key);
-        std::unique_ptr<Compare> BuildKeyNotExistsComparison(const std::string &key);
-        std::unique_ptr<RequestOp> BuildPutRequest(
-            const std::string &key,
-            const std::string &value
-        );
-        std::unique_ptr<RequestOp> BuildRangeRequest(
-            const std::string &key,
-            const std::string &range_end
-        );
-        std::unique_ptr<RequestOp> BuildPutRequest(const std::string &key, const std::string &value);
-        std::unique_ptr<RequestOp> BuildGetRequest(const std::string &key);
-        std::unique_ptr<RequestOp> BuildDeleteRequest(const std::string &key);
-        std::string RangePrefix(const std::string &key);
-    }
+  void WatchCancel(int64_t watch_id) override;
+
+  grpc::Status LeaseGrant(const LeaseGrantRequest &req,
+                          LeaseGrantResponse *res) override;
+
+  grpc::Status LeaseKeepAlive(const LeaseKeepAliveRequest &req,
+                              LeaseKeepAliveResponse *res) override;
+
+  grpc::Status Lock(const LockRequest &req, LockResponse *res) override;
+
+  grpc::Status Unlock(const UnlockRequest &req, UnlockResponse *res) override;
+
+  grpc::Status Transaction(const TxnRequest &req, TxnResponse *res) override;
+
+ private:
+  // Shared for mocking.
+  std::shared_ptr<KV::StubInterface> kv_stub_;
+  std::shared_ptr<Watch::StubInterface> watch_stub_;
+  std::shared_ptr<Lease::StubInterface> lease_stub_;
+  std::shared_ptr<Lock::StubInterface> lock_stub_;
+};
+
+namespace util {
+// Helper functions for transactions
+void MakeKeyExistsCompare(const std::string &key, Compare *compare);
+
+void MakeKeyNotExistsCompare(const std::string &key, Compare *compare);
+
+void AllocatePutRequest(const std::string &key, const std::string &value,
+                        RequestOp *requestOp);
+
+std::unique_ptr<RequestOp> BuildRangeRequest(
+    const std::string &key,
+    const std::string &range_end
+);
+
+std::unique_ptr<RequestOp>
+BuildPutRequest(const std::string &key, const std::string &value);
+
+std::unique_ptr<RequestOp> BuildGetRequest(const std::string &key);
+
+std::unique_ptr<RequestOp> BuildDeleteRequest(const std::string &key);
+
+std::string RangePrefix(const std::string &key);
+
+// Repeatedly retry calling JOB, waiting an exponentially increasing amount
+// of time between tries. Stops if JOB returns an OK status, or if TIMEOUT_MS
+// elapses. Note: Not guaranteed to be accurate in terms of wall time.
+grpc::Status ExponentialBackoff(
+    std::function<grpc::Status()> job,
+    int interval_ms,
+    int timeout_ms,
+    float multiplier
+);
 }
 
-
+}
 
 #endif //CREDIS_ETCD_H
