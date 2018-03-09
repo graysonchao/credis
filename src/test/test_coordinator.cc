@@ -1,10 +1,12 @@
 #include <memory>
-
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
+#include <nlohmann/json.hpp>
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
+#include <google/protobuf/util/message_differencer.h>
+#include "chain.h"
+#include "nlohmann/json.hpp"
 #include "etcd/etcd.h"
-#include "src/coordinator.h"
-#include "google/protobuf/util/message_differencer.h"
+#include "coordinator.h"
 
 using namespace ::testing;
 using namespace etcdserverpb;

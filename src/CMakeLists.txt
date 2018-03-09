@@ -1,8 +1,3 @@
-include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${CMAKE_SOURCE_DIR}/thirdparty/pkg)
-include_directories(${CMAKE_SOURCE_DIR}/redis/src/)
-include_directories(${CMAKE_SOURCE_DIR}/redis/deps/)
-
 find_package(glog 0.3.5 REQUIRED)
 find_package(LevelDB REQUIRED)
 find_package(Tcmalloc)
@@ -38,16 +33,16 @@ else()
 endif()
 
 # Protobufs types.
-set(PROTO_SRC_DIR "${CMAKE_SOURCE_DIR}/thirdparty/etcd_grpc/src")
+set(PROTO_SRC_DIR "${CMAKE_SOURCE_DIR}/thirdparty/pkg/etcd_grpc")
 set(PB_SOURCES
-    "${PROTO_SRC_DIR}/auth.grpc.pb.cc"
-    "${PROTO_SRC_DIR}/auth.pb.cc"
-    "${PROTO_SRC_DIR}/kv.grpc.pb.cc"
-    "${PROTO_SRC_DIR}/kv.pb.cc"
-    "${PROTO_SRC_DIR}/rpc.grpc.pb.cc"
-    "${PROTO_SRC_DIR}/rpc.pb.cc"
-    "${PROTO_SRC_DIR}/v3lock.grpc.pb.cc"
-    "${PROTO_SRC_DIR}/v3lock.pb.cc"
+    "${PROTO_SRC_DIR}/etcd_grpc/auth.grpc.pb.cc"
+    "${PROTO_SRC_DIR}/etcd_grpc/auth.pb.cc"
+    "${PROTO_SRC_DIR}/etcd_grpc/kv.grpc.pb.cc"
+    "${PROTO_SRC_DIR}/etcd_grpc/kv.pb.cc"
+    "${PROTO_SRC_DIR}/etcd_grpc/rpc.grpc.pb.cc"
+    "${PROTO_SRC_DIR}/etcd_grpc/rpc.pb.cc"
+    "${PROTO_SRC_DIR}/etcd_grpc/v3lock.grpc.pb.cc"
+    "${PROTO_SRC_DIR}/etcd_grpc/v3lock.pb.cc"
 
 )
 set_source_files_properties(
@@ -130,28 +125,28 @@ target_link_libraries(run_coordinator coordinator)
 # Benchmarks.
 add_executable(credis_parput_bench benchmarks/credis_parput_bench.cc)
 target_link_libraries(credis_parput_bench glog::glog client
-  ${CMAKE_SOURCE_DIR}/redis/deps/hiredis/libhiredis.a
-  ${CMAKE_SOURCE_DIR}/redis/src/ae.o
-  ${CMAKE_SOURCE_DIR}/redis/src/zmalloc.o
+  ${CMAKE_SOURCE_DIR}/thirdparty/pkg/redis/deps/hiredis/libhiredis.a
+  ${CMAKE_SOURCE_DIR}/thirdparty/pkg/redis/src/ae.o
+  ${CMAKE_SOURCE_DIR}/thirdparty/pkg/redis/src/zmalloc.o
   ${MALLOC_LIBRARY} timer)
 
 add_executable(credis_seqput_bench benchmarks/credis_seqput_bench.cc)
 target_link_libraries(credis_seqput_bench glog::glog client
-  ${CMAKE_SOURCE_DIR}/redis/deps/hiredis/libhiredis.a
-  ${CMAKE_SOURCE_DIR}/redis/src/ae.o
-  ${CMAKE_SOURCE_DIR}/redis/src/zmalloc.o
+  ${CMAKE_SOURCE_DIR}/thirdparty/pkg/redis/deps/hiredis/libhiredis.a
+  ${CMAKE_SOURCE_DIR}/thirdparty/pkg/redis/src/ae.o
+  ${CMAKE_SOURCE_DIR}/thirdparty/pkg/redis/src/zmalloc.o
   ${MALLOC_LIBRARY} timer)
 
 add_executable(redis_parput_bench benchmarks/redis_parput_bench.cc)
 target_link_libraries(redis_parput_bench glog::glog client
-  ${CMAKE_SOURCE_DIR}/redis/deps/hiredis/libhiredis.a
-  ${CMAKE_SOURCE_DIR}/redis/src/ae.o
-  ${CMAKE_SOURCE_DIR}/redis/src/zmalloc.o
+  ${CMAKE_SOURCE_DIR}/thirdparty/pkg/redis/deps/hiredis/libhiredis.a
+  ${CMAKE_SOURCE_DIR}/thirdparty/pkg/redis/src/ae.o
+  ${CMAKE_SOURCE_DIR}/thirdparty/pkg/redis/src/zmalloc.o
   ${MALLOC_LIBRARY} timer)
 
 add_executable(redis_seqput_bench benchmarks/redis_seqput_bench.cc)
 target_link_libraries(redis_seqput_bench glog::glog client
-  ${CMAKE_SOURCE_DIR}/redis/deps/hiredis/libhiredis.a
-  ${CMAKE_SOURCE_DIR}/redis/src/ae.o
-  ${CMAKE_SOURCE_DIR}/redis/src/zmalloc.o
+  ${CMAKE_SOURCE_DIR}/thirdparty/pkg/redis/deps/hiredis/libhiredis.a
+  ${CMAKE_SOURCE_DIR}/thirdparty/pkg/redis/src/ae.o
+  ${CMAKE_SOURCE_DIR}/thirdparty/pkg/redis/src/zmalloc.o
   ${MALLOC_LIBRARY} timer)

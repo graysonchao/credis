@@ -1,4 +1,4 @@
-#include "grpc++/grpc++.h"
+#include <grpcpp/grpcpp.h>
 #include "etcd/etcd.h"
 #include "coordinator.h"
 //

@@ -15,7 +15,7 @@ extern "C" {
 #include "hiredis/hiredis.h"
 }
 
-#include "leveldb/db.h"
+#include <leveldb/db.h>
 #include "etcd/etcd.h"
 
 using Status = leveldb::Status;

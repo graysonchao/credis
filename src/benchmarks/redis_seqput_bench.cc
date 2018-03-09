@@ -3,10 +3,10 @@
 #include <random>
 #include <vector>
 
-#include "glog/logging.h"
+#include <glog/logging.h>
 
-#include "client.h"
-#include "timer.h"
+#include "../client.h"
+#include "../timer.h"
 
 const int N = 50000;
 // const int N = 500000;

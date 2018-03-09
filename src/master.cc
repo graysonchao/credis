@@ -6,16 +6,17 @@
 #include <string>
 #include <vector>
 
+#include <grpcpp/grpcpp.h>
+#include <glog/logging.h>
+#include <leveldb/db.h>
+
+
 extern "C" {
 #include "hiredis/async.h"
 #include "hiredis/hiredis.h"
 #include "redismodule.h"
 }
 
-#include "glog/logging.h"
-#include "leveldb/db.h"
-
-#include <grpc++/grpc++.h>
 #include "utils.h"
 
 struct Member {

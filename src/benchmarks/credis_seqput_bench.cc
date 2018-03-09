@@ -4,10 +4,10 @@
 #include <thread>
 #include <unordered_set>
 
-#include "glog/logging.h"
+#include <glog/logging.h>
 
-#include "client.h"
-#include "timer.h"
+#include "../client.h"
+#include "../timer.h"
 
 // To launch with 2 servers:
 //

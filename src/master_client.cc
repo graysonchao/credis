@@ -2,9 +2,9 @@
 #include <chrono>
 #include <string>
 #include <thread>
+#include <glog/logging.h>
 
 #include "nlohmann/json.hpp"
-#include "glog/logging.h"
 #include "hiredis/hiredis.h"
 
 #include "master_client.h"

@@ -2,9 +2,9 @@
 #define CREDIS_COORDINATOR_H_
 
 #include <iostream>
+#include <glog/logging.h>
 
 #include "nlohmann/json.hpp"
-#include "glog/logging.h"
 #include "hiredis/hiredis.h"
 #include "etcd/etcd.h"
 #include "chain.h"

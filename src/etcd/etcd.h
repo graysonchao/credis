@@ -5,11 +5,11 @@
 #ifndef CREDIS_ETCD_H
 #define CREDIS_ETCD_H
 
-#include <grpc++/grpc++.h>
-#include "protos/src/rpc.pb.h"
-#include "protos/src/rpc.grpc.pb.h"
-#include "protos/src/v3lock.pb.h"
-#include "protos/src/v3lock.grpc.pb.h"
+#include <grpcpp/grpcpp.h>
+#include "rpc.pb.h"
+#include "rpc.grpc.pb.h"
+#include "v3lock.pb.h"
+#include "v3lock.grpc.pb.h"
 
 using namespace etcdserverpb;
 using namespace v3lockpb;

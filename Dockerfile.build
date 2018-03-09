@@ -1,0 +1,19 @@
+FROM base
+
+RUN apt-get update \
+	&& apt-get install -y -q \
+		git \
+		wget \
+		curl \
+		unzip \
+		g++ \
+		python \
+		make \
+		python-dev \
+		libtool \
+		autoconf \
+		automake \
+		libgoogle-glog-dev \
+		libleveldb-dev
+
+RUN bash /credis/thirdparty/scripts/setup.sh

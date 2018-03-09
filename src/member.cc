@@ -10,22 +10,18 @@
 #include <unordered_map>
 #include <vector>
 
-#include <grpc++/grpc++.h>
+#include <grpcpp/grpcpp.h>
+#include <glog/logging.h>
+#include <leveldb/db.h>
+#include <leveldb/write_batch.h>
 
 extern "C" {
 #include "hiredis/adapters/ae.h"
 #include "hiredis/async.h"
 #include "hiredis/hiredis.h"
 #include "redismodule.h"
+#include "ae.h"
 }
-
-extern "C" {
-#include "redis/src/ae.h"
-}
-
-#include "glog/logging.h"
-#include "leveldb/db.h"
-#include "leveldb/write_batch.h"
 
 #include "master_client.h"
 #include "utils.h"

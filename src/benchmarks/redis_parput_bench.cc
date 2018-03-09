@@ -1,9 +1,9 @@
 #include <chrono>
 #include <vector>
 
-#include "glog/logging.h"
+#include <glog/logging.h>
 
-#include "client.h"
+#include "../client.h"
 
 const int N = 5000000;
 int num_completed = 0;

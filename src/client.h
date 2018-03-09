@@ -8,14 +8,14 @@
 #include <string>
 #include <unordered_map>
 
+#include <glog/logging.h>
+#include <leveldb/db.h>
+
 extern "C" {
 #include "hiredis/adapters/ae.h"
 #include "hiredis/async.h"
 #include "hiredis/hiredis.h"
 }
-
-#include "glog/logging.h"
-#include "leveldb/db.h"
 
 using Status = leveldb::Status;
 

@@ -4,7 +4,7 @@
 #include <sys/time.h>
 #include <time.h>
 
-#include "glog/logging.h"
+#include <glog/logging.h>
 
 #include "timer.h"
 

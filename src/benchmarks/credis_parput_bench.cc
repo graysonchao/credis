@@ -4,9 +4,9 @@
 #include <cmath>
 #include <vector>
 
-#include "glog/logging.h"
+#include <glog/logging.h>
 
-#include "client.h"
+#include "../client.h"
 
 aeEventLoop* loop = aeCreateEventLoop(1024);
 redisAsyncContext* write_context = nullptr;

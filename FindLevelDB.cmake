@@ -10,7 +10,7 @@
 #  LevelDB_LIBRARIES - List of libraries when using LevelDB.
 #  LevelDB_FOUND     - True if LevelDB found.
 
-set(LEVELDB_ROOT "${CMAKE_SOURCE_DIR}/leveldb")
+set(LEVELDB_ROOT "${CMAKE_SOURCE_DIR}/thirdparty/pkg/leveldb")
 
 # Look for the header file.
 find_path(LevelDB_INCLUDE NAMES leveldb/db.h

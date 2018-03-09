@@ -1,7 +1,7 @@
 #include <iostream>
 #include <thread>
 #include <boost/optional/optional.hpp>
-#include "glog/logging.h"
+#include <glog/logging.h>
 #include "coordinator.h"
 
 using namespace chain;

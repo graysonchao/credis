@@ -4,11 +4,11 @@
 
 #include <boost/optional/optional.hpp>
 #include <boost/algorithm/string.hpp>
+#include <glog/logging.h>
 #include <string>
-#include <src/nlohmann/json.hpp>
 #include <thread>
 #include "chain.h"
-#include "glog/logging.h"
+#include "nlohmann/json.hpp"
 
 using namespace chain;
 using json = nlohmann::json;

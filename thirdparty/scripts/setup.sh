@@ -31,7 +31,7 @@ bash "$TP_SCRIPT_DIR/build_redis.sh"
 bash "$TP_SCRIPT_DIR/build_glog.sh"
 
 ##############################################
-# grpc
+# grpc (installs protoc)
 ##############################################
 bash "$TP_SCRIPT_DIR/build_grpc.sh"
 
@@ -39,11 +39,6 @@ bash "$TP_SCRIPT_DIR/build_grpc.sh"
 # leveldb
 ##############################################
 bash "$TP_SCRIPT_DIR/build_leveldb.sh"
-
-##############################################
-# protobuf
-##############################################
-bash "$TP_SCRIPT_DIR/build_protobuf.sh"
 
 ##############################################
 # etcd grpc bindings

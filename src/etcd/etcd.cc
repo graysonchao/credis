@@ -3,10 +3,17 @@
 //
 
 #include <future>
-#include <utility>
-#include <leveldb/include/leveldb/status.h>
-#include "glog/logging.h"
+
+#include <grpcpp/grpcpp.h>
+#include <leveldb/status.h>
+#include <glog/logging.h>
 #include "etcd.h"
+
+// etcd gRPC API types
+#include "rpc.grpc.pb.h"
+#include "rpc.grpc.pb.h"
+#include "v3lock.pb.h"
+#include "v3lock.grpc.pb.h"
 
 using namespace etcdserverpb;
 using namespace v3lockpb;

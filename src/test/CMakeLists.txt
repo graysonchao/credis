@@ -36,16 +36,6 @@ if (CMAKE_VERSION VERSION_LESS 2.8.11)
 endif()
 
 # Unit tests.
-# Linking with gtest_main lets GTest implement the main() function to run tests for us.
-# If you need to write your own main function for running tests, link with gtest instead.
-add_executable(test_etcd test_etcd.cc)
-target_link_libraries(test_etcd gtest_main)
-target_link_libraries(test_etcd gmock)
-target_link_libraries(test_etcd etcd)
-target_link_libraries(test_etcd glog::glog)
-target_include_directories(test_etcd PUBLIC "${CMAKE_SOURCE_DIR}/src")
-add_test(NAME test_etcd COMMAND test_etcd)
-
 add_executable(test_coordinator test_coordinator.cc)
 target_include_directories(test_coordinator PUBLIC "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(test_coordinator gtest_main)

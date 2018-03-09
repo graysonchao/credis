@@ -19,5 +19,6 @@ if [ ! -d $TP_DIR/pkg/grpc/ ]; then
     git submodule update --init
     make -j
     make -j install
+    pushd third_party/protobuf; make -j install; popd
   popd
 fi
