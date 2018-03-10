@@ -282,10 +282,10 @@ void MasterClient::StartWatchingConfig() {
         WatchRequest watch_req;
         watch_req.set_allocated_create_request(wcr);
         WatchResponse watch_res;
-        etcd::WatchStreamPtr changes = etcd->MakeWatchStream(watch_req,
-                                                          &watch_res);
+        etcd::WatchStreamPtr changes = etcd->MakeWatchStream(watch_req);
         LOG(INFO) << "Started watching configs at " << my_config_key;
         WatchResponse wr;
+        changes->Read(&wr);
         int64_t last_rev_seen = wr.header().revision();
         while (true) {
           CHECK(changes->Read(&wr))

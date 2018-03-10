@@ -39,8 +39,8 @@ class ClientInterface {
 
   // Create a watch stream, which is a bidirectional GRPC stream where the
   // client receives all change events to the requested keys.
-  virtual WatchStreamPtr MakeWatchStream(const WatchRequest& req,
-                                         WatchResponse* res) = 0;
+  // The first event received contains the result of the connection attempt.
+  virtual WatchStreamPtr MakeWatchStream(const WatchRequest& req) = 0;
 
   virtual void WatchCancel(int64_t watch_id) = 0;
 
@@ -78,8 +78,7 @@ class Client : public ClientInterface {
   grpc::Status Range(const RangeRequest& request,
                      RangeResponse* response) override;
 
-  WatchStreamPtr MakeWatchStream(const WatchRequest& req,
-                                 WatchResponse* res) override;
+  WatchStreamPtr MakeWatchStream(const WatchRequest& req) override;
 
   void WatchCancel(int64_t watch_id) override;
 
@@ -126,15 +125,16 @@ std::unique_ptr<RequestOp> BuildDeleteRequest(const std::string &key);
 
 std::string RangePrefix(const std::string &key);
 
-// Repeatedly retry calling JOB, waiting an exponentially increasing amount
-// of time between tries. Stops if JOB returns an OK status, or if TIMEOUT_MS
-// elapses. Note: Not guaranteed to be accurate in terms of wall time.
-grpc::Status ExponentialBackoff(
-    std::function<grpc::Status()> job,
-    int interval_ms,
-    int timeout_ms,
-    float multiplier
-);
+class BackoffOpts {
+ public:
+  int interval_ms = 500;
+  int timeout_ms = 30 * 1000;
+  float multiplier = 2;
+};
+grpc::Status ExponentialBackoff(std::function<grpc::Status()> job,
+                                BackoffOpts opts);
+grpc::Status ExponentialBackoff(std::function<grpc::Status()> job);
+
 }
 
 }

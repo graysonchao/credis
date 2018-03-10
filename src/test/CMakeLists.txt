@@ -53,3 +53,11 @@ target_link_libraries(test_coordinator gmock)
 target_link_libraries(test_coordinator glog::glog)
 target_link_libraries(test_coordinator coordinator)
 add_test(NAME test_coordinator COMMAND test_coordinator)
+
+# Unit tests.
+add_executable(test_chain test_chain.cc)
+target_include_directories(test_chain PUBLIC "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(test_chain gtest_main)
+target_link_libraries(test_chain gmock)
+target_link_libraries(test_chain chain)
+add_test(NAME test_chain COMMAND test_chain)

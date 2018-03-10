@@ -1,4 +1,6 @@
-#include "grpc++/grpc++.h"
+#include <chrono>
+#include "glog/logging.h"
+#include "grpcpp/grpcpp.h"
 #include "etcd/etcd.h"
 #include "coordinator.h"
 //
@@ -19,5 +21,10 @@ int main(int argc, char* argv[]) {
     exit(1);
   }
   std::string chain_id(argv[1]);
-  c.ManageChain(chain_id);
+  LOG(INFO)
+      << "Managing chain " << chain_id << " at " << address << ":" << port;
+  grpc::Status status = c.ManageChain(chain_id);
+  if (status.ok()) {
+    LOG(FATAL) << status.error_message();
+  }
 }

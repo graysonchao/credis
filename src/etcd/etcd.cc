@@ -98,15 +98,11 @@ grpc::Status etcd::Client::Transaction(const TxnRequest& req,
 
 // Initiate a watch stream for the given key, range end, etc. by creating a stream and sending a WatchCreateRequest.
 // The caller gets back a pointer to a stream that already has a WatchResponse buffered.
-WatchStreamPtr etcd::Client::MakeWatchStream(
-    const WatchRequest& req,
-    WatchResponse* res
-) {
+WatchStreamPtr etcd::Client::MakeWatchStream(const WatchRequest& req) {
   // TODO gchao: Does this leak memory? It's not clear if the GRPC stub frees the context. Can't find any docs.
   auto context = new grpc::ClientContext();
   auto watch_stream = watch_stub_->Watch(context);
   watch_stream->Write(req);
-  watch_stream->Read(res);
   return watch_stream;
 }
 
@@ -161,28 +157,23 @@ std::string etcd::util::RangePrefix(const std::string& key) {
   return prefix;
 }
 
-/**
- * Repeatedly try to call JOB with exponential backoff, returning true if successful.
- * The actual timeout is not guaranteed to be exactly the timeout given.
- * @param interval_ms
- * @param timeout_ms
- * @param multiplier
- * @param job
- */
-grpc::Status etcd::util::ExponentialBackoff(
-    std::function<grpc::Status()> job,
-    int interval_ms,
-    int timeout_ms,
-    float multiplier
-) {
+
+// Given a function returning a grpc::Status, repeatedly call the function
+// until timeout elapses or the returned status == OK.
+// WARNING: makes no attempt to ensure that elapsed_ms follows wall time.
+grpc::Status etcd::util::ExponentialBackoff(std::function<grpc::Status()> job,
+                                            etcd::util::BackoffOpts opts) {
   int elapsed_ms = 0;
   while (true) {
     auto status = job();
-    std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
-    elapsed_ms += interval_ms;
-    interval_ms *= multiplier;
-    if (elapsed_ms > timeout_ms || status.ok()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(opts.interval_ms));
+    elapsed_ms += opts.interval_ms;
+    opts.interval_ms *= opts.multiplier;
+    if (elapsed_ms > opts.timeout_ms || status.ok()) {
       return status;
     }
   }
+}
+grpc::Status etcd::util::ExponentialBackoff(std::function<grpc::Status()> job) {
+  return etcd::util::ExponentialBackoff(job, etcd::util::BackoffOpts());
 }

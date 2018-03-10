@@ -13,74 +13,78 @@
 using namespace chain;
 using json = nlohmann::json;
 
-Chain::Chain(
-    std::string app_prefix,
-    std::string chain_id,
-    std::map<std::string, std::string> initial_state
-) : app_prefix(app_prefix), id(chain_id) {
-  for (auto it : initial_state) {
-    MemberKey key(it.first);
-    members[key.member_id].id = key.member_id;
-    if (key.type == "hb") {
-      LOG(INFO) << "Chain read heartbeat for " << key.member_id << ": " << it.second;
-      members[key.member_id].heartbeat.emplace(it.second);
-    } else if (key.type == "config") {
-      LOG(INFO) << "Chain read config for " << key.member_id << ": " << it.second;
-      members[key.member_id].config.emplace(it.second);
-    }
-  }
-  for (auto &it: members) {
-    if (!it.second.config.is_initialized()) {
-      it.second.config.emplace();
-    }
-  }
+Chain::Chain(std::string app_prefix, std::string chain_id)
+    : app_prefix(app_prefix), id(chain_id) { }
+
+Member Chain::Head() {
+  return members[head_id];
 }
 
-/**
- * Given JSON for a heartbeat, adds a member with no config.
- * @param id
- * @param hb_json
- * @return
- */
+Member Chain::Tail() {
+  return members[tail_id];
+}
+
 void Chain::AddMember(
-    int64_t id,
-    std::string hb_json
+    Member new_tail
 ) {
-  auto member_it = members.find(id);
+  auto member_it = members.find(new_tail.id);
   if (member_it != members.end()) {
-    LOG(INFO) << "Readding a member, " << id;
+    DLOG(INFO) << "Readding a member, " << id;
   }
-  members[id].id = id;
-  members[id].heartbeat.emplace(hb_json);
+  members[new_tail.id] = new_tail;
   if (members.size() == 1) {
-    members[id].config.emplace(kRoleSingleton, kNoMember, kNoMember);
-    head_id = id;
-    tail_id = id;
+    SetRole(new_tail.id, kRoleSingleton);
   } else {
     auto old_tail_id = tail_id;
-    members[id].config.emplace(kRoleUninitialized, old_tail_id, kNoMember);
-    SetRole(id, kRoleTail);
+    SetRole(new_tail.id, kRoleTail);
     if (members.size() == 2) {
       SetRole(old_tail_id, kRoleHead);
     } else {
       SetRole(old_tail_id, kRoleMiddle);
     }
-    SetNext(old_tail_id, id);
-    SetPrev(id, old_tail_id);
+    SetNext(old_tail_id, new_tail.id);
+    SetPrev(new_tail.id, old_tail_id);
+  }
+}
+
+bool Chain::HasMember(int64_t id) {
+  return members.find(id) != members.end();
+}
+
+// Remove a member from the chain, repointing its neighbors appropriately.
+void Chain::RemoveMember(int64_t member_id) {
+  if (HasMember(member_id)) {
+    Member failed = members[member_id];
+    if (failed.config.role == chain::kRoleHead) {
+      SetRole(failed.config.next, chain::kRoleHead);
+      SetPrev(failed.config.next, chain::kNoMember);
+    } else if (failed.config.role == kRoleTail) {
+      SetRole(failed.config.prev, kRoleTail);
+      SetNext(failed.config.prev, chain::kNoMember);
+    } else if (failed.config.role == kRoleMiddle) {
+      SetNext(failed.config.prev, failed.config.next);
+      SetPrev(failed.config.next, failed.config.prev);
+    }
+    members.erase(member_id);
+
+    if (members.empty()) {
+      head_id = kNoMember;
+      tail_id = kNoMember;
+    } else if (members.size() == 1) {
+      SetRole(members.begin()->first, kRoleSingleton);
+      SetPrev(members.begin()->first, kNoMember);
+      SetNext(members.begin()->first, kNoMember);
+    }
   }
 }
 
 /**
  * Return all of the key-value pairs, as strings, that represent this chain in durable storage.
- * It is an error to call this method when any of the chain's members are missing a heartbeat or config.
- * It is also an error to call this method if the chain is not a properly formed linked list.
+ * Iterates the chain first and removes any dead members.
  * @return
  */
 std::vector<std::pair<std::string, std::string>> Chain::SerializedState() {
   std::vector<std::pair<std::string, std::string>> intended_state;
-
-  EnforceChain();
-
   if (members.empty()) {
     LOG(INFO) << "Serialized an empty chain because no members were found.";
     return intended_state;
@@ -89,13 +93,13 @@ std::vector<std::pair<std::string, std::string>> Chain::SerializedState() {
   if (members.size() == 1) {
     LOG(INFO) << "Serializing a singleton chain.";
     auto m = members.begin()->second;
-    CHECK(m.heartbeat.is_initialized() && m.config.is_initialized())
-        << "Invalid member encountered during serialization: "
-        << "heartbeat or config not found for ID " << m.id;
-    CHECK(m.config->role == "singleton")
-        << "Invalid member encountered during serialization: "
-        << "the only member of a 1-node chain should have role=singleton.";
-    intended_state.emplace_back(ConfigPath(m.id), m.config->ToJSON());
+    CHECK(m.HasHeartbeat() && m.HasConfig())
+    << "Invalid member encountered during serialization: "
+    << "heartbeat or config not found for ID " << m.id;
+    CHECK(m.config.role == "singleton")
+    << "Invalid member encountered during serialization: "
+    << "the only member of a 1-node chain should have role=singleton.";
+    intended_state.emplace_back(ConfigKey(m.id), m.config.ToJSON());
     return intended_state;
   }
 
@@ -106,158 +110,63 @@ std::vector<std::pair<std::string, std::string>> Chain::SerializedState() {
   }
   while (current != members.end()) {
     auto m = current->second;
-    CHECK(m.heartbeat.is_initialized() && m.config.is_initialized())
-        << "Invalid member encountered during serialization: "
-        << "heartbeat or config not found for ID " << m.id;
-    if (m.config->role != kRoleTail) {
-      CHECK(m.config->next != kNoMember)
-          << "Head does not lead to the tail! "
-          << m.id << " has role=" << m.config->role << ", but next=" << m.config->next;
+    CHECK(m.HasHeartbeat() && m.HasConfig())
+    << "Invalid member encountered during serialization: "
+    << "heartbeat or config not found for ID " << m.id;
+    if (m.config.role != kRoleTail) {
+      CHECK(m.config.next != kNoMember)
+      << "Head does not lead to the tail! "
+      << m.id << " has role=" << m.config.role << ", but next=" << m.config.next;
     }
-    current = members.find(m.config->next);
-    intended_state.emplace_back(ConfigPath(m.id), m.config->ToJSON());
-    if (m.config->role == kRoleTail) {
+    current = members.find(m.config.next);
+    intended_state.emplace_back(ConfigKey(m.id), m.config.ToJSON());
+    if (m.config.role == kRoleTail) {
       return intended_state;
     }
   }
   return intended_state;
 }
 
-/**
- * Enforce that the state of the members represents a working chain.
- * Mutates the Chain by removing any members that don't have heartbeats.
- * Returns the members that were removed.
- * @param foreach
- */
-std::vector<Member> Chain::EnforceChain() {
-  std::vector<Member> deleted;
-  auto current = members.begin();
-  while (current != members.end()) {
-    if (!current->second.heartbeat.is_initialized()) {
-      deleted.push_back(current->second);
-      auto to_delete = current->first;
-      current++;
-      members.erase(to_delete);
-    } else {
-      current++;
-    }
-  }
-  if (members.empty()) {
-    return deleted;
-  }
-
-  current = members.begin();
-  if (members.size() == 1) {
-    head_id = current->first;
-    tail_id = current->first;
-    SetRole(current->first, kRoleSingleton);
-    return deleted;
-  }
-  SetRole(current->first, kRoleHead);
-  SetPrev(current->first, kNoMember);
-
-  head_id = current->first;
-  auto last = current;
-  current++;
-  while (current != members.end()) {
-    SetNext(last->first, current->first);
-    SetPrev(current->first, last->first);
-    SetRole(current->first, kRoleMiddle);
-    last = current;
-    current++;
-  }
-  tail_id = last->first;
-  SetRole(last->first, kRoleTail);
-  SetNext(last->first, kNoMember);
-
-  LOG(INFO) << "Chain after enforcing: ";
-  for (auto it: members) {
-    LOG(INFO) << it.first << ": "
-              << it.second.config->ToJSON();
-  }
-  return deleted;
-}
-
-std::string Chain::ToString() {
-  std::string output;
-  for (auto it: members) {
-    output = output + std::to_string(it.first) + ", ";
-  }
-  return output;
-}
-
-std::string Chain::ConfigPath(const int64_t member_id) const {
+std::string Chain::ConfigKey(int64_t member_id) const {
   return MemberKey(
       app_prefix,
       id,
       member_id,
-      "config"
+      kKeyTypeConfig
   ).ToString();
 }
 
-std::string Chain::HeartbeatPath(const int64_t member_id) const {
-  return MemberKey(
-      app_prefix,
-      id,
-      member_id,
-      "hb"
-  ).ToString();
+std::string Chain::MemberDirectory(int64_t member_id) const {
+  return app_prefix + ":" + id + "/" + std::to_string(member_id);
 }
 
 void Chain::SetNext(int64_t member_id, int64_t next_id) {
-  auto it = members.find(member_id);
-  if (it != members.end()) {
-    auto &m = it->second;
-    if (m.config.is_initialized()) {
-      m.config.emplace(m.config->role, m.config->prev, next_id);
-    } else {
-      m.config.emplace(kRoleUninitialized, kNoMember, next_id);
-    }
-    LOG(INFO) << "Set member " << member_id << " next_id to " << next_id;
-  } else {
-    LOG(INFO) << "Tried to set next_id for a nonexistent member ID, " << member_id;
-  }
+  CHECK(HasMember(member_id))
+  << "Tried to set child of a nonexistent member, ID=" << member_id;
+  members[member_id].config.next = next_id;
+  DLOG(INFO) << "Set member " << member_id << " child to " << next_id;
 }
 
 void Chain::SetPrev(int64_t member_id, int64_t prev_id) {
-  auto it = members.find(member_id);
-  if (it != members.end()) {
-    auto &m = it->second;
-    if (m.config.is_initialized()) {
-      m.config.emplace(m.config->role, prev_id, m.config->next);
-    } else {
-      m.config.emplace(kRoleUninitialized, prev_id, kNoMember);
-    }
-    LOG(INFO) << "Set member " << member_id << " prev to " << prev_id;
-  } else {
-    LOG(INFO) << "Tried to set prev for a nonexistent member ID, " << member_id;
-  }
+  CHECK(HasMember(member_id))
+  << "Tried to set parent of a nonexistent member, ID=" << member_id;
+  members[member_id].config.prev = prev_id;
+  DLOG(INFO) << "Set member " << member_id << " parent to " << prev_id;
 }
 
 void Chain::SetRole(int64_t member_id, std::string role) {
-  auto it = members.find(member_id);
-  if (it != members.end()) {
-    auto &m = it->second;
-    if (m.config.is_initialized()) {
-      m.config.emplace(role, m.config->prev, m.config->next);
-    } else {
-      m.config.emplace(role, kNoMember, kNoMember);
-    }
-    if (role == kRoleHead) {
-      head_id = member_id;
-    } else if (role == kRoleTail) {
-      tail_id = member_id;
-    } else if (role == kRoleSingleton) {
-      head_id = member_id;
-      tail_id = member_id;
-    }
-    LOG(INFO) << "Set member " << member_id << " role to " << role;
-  } else {
-    LOG(INFO) << "Tried to set role for a nonexistent member ID, " << member_id;
+  CHECK(HasMember(member_id))
+  << "Tried to set role of a nonexistent member, ID=" << member_id;
+
+  members[member_id].config.role = role;
+  if (role == kRoleHead) {
+    head_id = member_id;
+  } else if (role == kRoleTail) {
+    tail_id = member_id;
+  } else if (role == kRoleSingleton) {
+    head_id = member_id;
+    tail_id = member_id;
   }
-}
-bool Chain::HasMember(int64_t id) {
-  return members.find(id) != members.end();
 }
 
 /**
@@ -294,7 +203,9 @@ std::string MemberKey::ToString() const {
 MemberConfig::MemberConfig():
     role(chain::kRoleUninitialized),
     prev(chain::kNoMember),
-    next(chain::kNoMember) {}
+    next(chain::kNoMember) {
+}
+
 MemberConfig::MemberConfig(const std::string &json_str) {
   json config_data = json::parse(json_str);
   role = config_data["role"];
@@ -312,6 +223,26 @@ MemberConfig::MemberConfig(
   next = _next;
 }
 
+bool MemberConfig::operator==(const MemberConfig& other) {
+  return role == other.role && prev == other.prev && /**/next == other.next;
+}
+
+bool MemberConfig::operator!=(const MemberConfig& other) {
+  return !(*this == other);
+}
+
+bool MemberConfig::IsInitialized() {
+  if (role == chain::kRoleSingleton) {
+    return true;
+  } else if (role == chain::kRoleHead) {
+    return next != chain::kNoMember;
+  } else if (role == chain::kRoleTail) {
+    return prev != chain::kNoMember;
+  } else {
+    return next != chain::kNoMember && prev != chain::kNoMember;
+  }
+}
+
 std::string MemberConfig::ToJSON() const {
   return json{
       {"role", role},
@@ -325,6 +256,7 @@ std::string MemberConfig::ToJSON() const {
  * @param json_str
  */
 MemberHeartbeat::MemberHeartbeat() = default;
+
 MemberHeartbeat::MemberHeartbeat(const std::string &json_str) {
   LOG(INFO) << json_str;
   json hb_data = json::parse(json_str);
@@ -332,6 +264,7 @@ MemberHeartbeat::MemberHeartbeat(const std::string &json_str) {
   address = hb_data["address"];
   port =  hb_data["port"];
 };
+
 std::string MemberHeartbeat::ToJSON() const {
   return json{
       {"address", address},
@@ -342,12 +275,25 @@ std::string MemberHeartbeat::ToJSON() const {
   }.dump();
 }
 
+bool MemberHeartbeat::IsInitialized() {
+  return address != "";
+}
+
+MemberHeartbeat::MemberHeartbeat(std::string address,
+                                 int port,
+                                 std::string role,
+                                 int64_t prev,
+                                 int64_t next)
+    : address(address), port(port), config(MemberConfig(role, prev, next)) {}
+
 Member::Member(int64_t id): id(id) {}
-Member::Member(int64_t id, MemberConfig config, MemberHeartbeat heartbeat)
-    : id(id), config(config), heartbeat(heartbeat) {}
-
-Member::Member(): id(kNoMember) { }
-
+Member::Member(): id(kNoMember) {}
+bool Member::HasHeartbeat() {
+  return heartbeat.IsInitialized();
+}
+bool Member::HasConfig() {
+  return config.IsInitialized();
+}
 
 /**
  * Repeatedly try to call JOB with exponential backoff, returning true if successful.
