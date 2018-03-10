@@ -1,4 +1,3 @@
-#include <boost/optional/optional.hpp>
 #include <chrono>
 #include <string>
 #include <thread>

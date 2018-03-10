@@ -2,10 +2,8 @@
 // Created by Grayson Chao on 3/1/18.
 //
 
-#include <boost/optional/optional.hpp>
-#include <boost/algorithm/string.hpp>
 #include <string>
-#include <src/nlohmann/json.hpp>
+#include "src/nlohmann/json.hpp"
 #include <thread>
 #include "chain.h"
 #include "glog/logging.h"
@@ -176,7 +174,16 @@ void Chain::SetRole(int64_t member_id, std::string role) {
 MemberKey::MemberKey(const std::string &key_str) {
   // example string: credis:chain_id/member_id/config
   std::vector<std::string> components;
-  boost::split(components, key_str, [](char c){return c == '/' || c == ':';});
+  std::string delimiters = ":/";
+  size_t current;
+  size_t next = -1;
+  do
+  {
+    current = next + 1;
+    next = key_str.find_first_of( delimiters, current );
+    components.push_back(key_str.substr( current, next - current ));
+  }
+  while (next != std::string::npos);
   app_prefix = components[0];
   chain_id  = components[1];
   member_id = std::stol(components[2]);
