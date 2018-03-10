@@ -14,10 +14,9 @@ pushd glog && cmake . && make -j install && popd
 pushd leveldb && make -j && popd
 
 # Generate protobufs source files for etcd.
-# You must have grpc, protobufs, and protobuf-c installed.
+# You must have grpc, protobufs installed
 # https://github.com/grpc/grpc/blob/master/INSTALL.md
 # https://github.com/google/protobuf/blob/master/src/README.md
-# https://github.com/protobuf-c/protobuf-c/blob/master/README.md
 # protobuf-c is to support building pure-C Protobufs symbols for Redis modules.
 pushd protos && make && popd
 
