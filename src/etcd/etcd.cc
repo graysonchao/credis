@@ -4,7 +4,7 @@
 
 #include <future>
 #include <utility>
-#include <leveldb/include/leveldb/status.h>
+#include "leveldb/include/leveldb/status.h"
 #include "glog/logging.h"
 #include "etcd.h"
 

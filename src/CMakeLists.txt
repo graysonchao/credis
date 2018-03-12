@@ -4,9 +4,9 @@ include_directories(${CMAKE_SOURCE_DIR}/redis/deps/)
 
 find_package(glog 0.3.5 REQUIRED)
 find_package(LevelDB REQUIRED)
+find_package(Protobuf REQUIRED)
+find_package(GRPC REQUIRED)
 find_package(Tcmalloc)
-find_package(Protobuf)
-find_package(GRPC)
 
 include_directories(${Protobuf_INCLUDE_DIRS})
 include_directories(${GRPC_INCLUDE_DIR})
@@ -55,12 +55,15 @@ set_source_files_properties(
     PROPERTIES
     COMPILE_FLAGS "-Wno-unused-variable -Wno-unused-parameter"
 )
-add_library(pb_types SHARED ${PB_SOURCES})
-target_compile_options(pb_types PUBLIC -Wno-unused-variable -Wno-unused-parameter)
+add_library(pb_types STATIC ${PB_SOURCES})
+target_compile_options(pb_types PUBLIC
+ ${REDIS_MODULE_CFLAGS}
+ -Wno-unused-variable
+ -Wno-unused-parameter
+ -fPIC)
 target_link_libraries(pb_types gRPC::grpc)
 target_link_libraries(pb_types gRPC::grpc++)
-target_link_libraries(pb_types ${Protobuf_LIBRARIES})
-# For files
+target_link_libraries(pb_types ${PROTOBUF_LIBRARIES})
 
 # timer
 add_library(timer STATIC timer.cc)
@@ -117,13 +120,15 @@ target_link_libraries(member ${MALLOC_LIBRARY})
 # new master (TODO rename from coordinator later)
 add_library(coordinator STATIC coordinator.cc)
 target_compile_options(coordinator PUBLIC ${REDIS_MODULE_CFLAGS} -fPIC)
-target_link_libraries(coordinator ${REDIS_MODULE_LDFLAGS})
+target_link_libraries(pb_types gRPC::grpc)
+target_link_libraries(pb_types gRPC::grpc++)
 target_link_libraries(coordinator glog::glog)
 target_link_libraries(coordinator etcd)
 target_link_libraries(coordinator utils)
 target_link_libraries(coordinator chain)
 
 add_executable(run_coordinator run_coordinator.cc)
+target_link_libraries(pb_types ${PROTOBUF_LIBRARIES})
 target_link_libraries(run_coordinator etcd)
 target_link_libraries(run_coordinator coordinator)
 

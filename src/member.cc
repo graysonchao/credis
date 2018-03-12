@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <grpc++/grpc++.h>
+#include "grpcpp/grpcpp.h"
 
 extern "C" {
 #include "hiredis/adapters/ae.h"

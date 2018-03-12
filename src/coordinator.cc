@@ -2,6 +2,8 @@
 #include <thread>
 #include "glog/logging.h"
 #include "coordinator.h"
+#include "etcd/etcd.h"
+#include "chain.h"
 
 using namespace chain;
 using json = nlohmann::json;
