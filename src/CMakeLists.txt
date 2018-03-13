@@ -6,6 +6,7 @@ find_package(glog 0.3.5 REQUIRED)
 find_package(LevelDB REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(GRPC REQUIRED)
+find_package(gflags REQUIRED)
 find_package(Tcmalloc)
 
 include_directories(${Protobuf_INCLUDE_DIRS})
@@ -129,6 +130,7 @@ target_link_libraries(coordinator chain)
 
 add_executable(run_coordinator run_coordinator.cc)
 target_link_libraries(pb_types ${PROTOBUF_LIBRARIES})
+target_link_libraries(run_coordinator gflags)
 target_link_libraries(run_coordinator etcd)
 target_link_libraries(run_coordinator coordinator)
 
