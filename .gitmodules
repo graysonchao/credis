@@ -10,3 +10,6 @@
 [submodule "grpc"]
 	path = grpc
 	url = https://github.com/grpc/grpc
+[submodule "gflags"]
+	path = gflags
+	url = https://github.com/gflags/gflags
