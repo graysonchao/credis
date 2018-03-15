@@ -1,0 +1,19 @@
+version: '3'
+services:
+    client:
+        image: graysonchao/credis
+        # hack to just stay alive and do nothing
+        command: tail -f /var/log/bootstrap.log
+    etcd:
+        image: appcelerator/etcd
+        container_name: credis_etcd
+        ports:
+            - "2379"
+    master:
+        image: graysonchao/credis
+        command: tail -f /var/log/bootstrap.log
+    member:
+        image: graysonchao/credis
+        command: /bin/bash -c "/run-member.sh -m /credis/build/src -p 6379"
+        ports:
+        - "6379"
