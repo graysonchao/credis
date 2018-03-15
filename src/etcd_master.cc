@@ -1,25 +1,25 @@
 #include <iostream>
 #include <thread>
 #include "glog/logging.h"
-#include "coordinator.h"
+#include "etcd_master.h"
 #include "etcd/etcd.h"
 #include "chain.h"
 
 using namespace chain;
 using json = nlohmann::json;
 
-const std::string Coordinator::kKeyPrefix = "credis";
-const Coordinator::Options kDefaultOptions {
+const std::string EtcdMaster::kKeyPrefix = "credis";
+const EtcdMaster::Options kDefaultOptions {
     /*bool auto_add_new_members = */false
 };
 
-Coordinator::Coordinator(std::unique_ptr<etcd::ClientInterface> etcd,
-                         Coordinator::Options options)
+EtcdMaster::EtcdMaster(std::unique_ptr<etcd::ClientInterface> etcd,
+                         EtcdMaster::Options options)
     : etcd_(std::move(etcd)), options_(options) {}
-Coordinator::Coordinator(std::unique_ptr<etcd::ClientInterface> etcd)
+EtcdMaster::EtcdMaster(std::unique_ptr<etcd::ClientInterface> etcd)
     : etcd_(std::move(etcd)), options_(kDefaultOptions) {}
 
-grpc::Status Coordinator::ManageChain(std::string chain_id) {
+grpc::Status EtcdMaster::ManageChain(std::string chain_id) {
   auto chain_prefix = kKeyPrefix + ":" + chain_id;
   RangeResponse res;
   auto status = etcd::util::ExponentialBackoff(
@@ -47,7 +47,7 @@ grpc::Status Coordinator::ManageChain(std::string chain_id) {
 
 // Listen for changes to a chain and respond to failures by generating and
 // writing a new intended config to etcd.
-grpc::Status Coordinator::ListenForChanges(Chain *chain) {
+grpc::Status EtcdMaster::ListenForChanges(Chain *chain) {
   // We may be watching a chain that has already had a master that failed.
   // Fixes all dead nodes at once, in case some have died since the old master
   // failed.
@@ -124,7 +124,7 @@ grpc::Status Coordinator::ListenForChanges(Chain *chain) {
 // members and deletes their intended configs as part of the transaction.
 //
 // Returns the revision # that corresponds to the transaction in etcd.
-int64_t Coordinator::WriteChain(Chain* chain) {
+int64_t EtcdMaster::WriteChain(Chain* chain) {
   std::vector<int64_t> dead_member_ids;
   for (auto &it: chain->members) {
     if (!it.second.HasHeartbeat()) {
@@ -174,12 +174,12 @@ int64_t Coordinator::WriteChain(Chain* chain) {
   return flush_revision + 1;
 }
 
-bool Coordinator::IsSystemKey(const std::string& key) {
+bool EtcdMaster::IsSystemKey(const std::string& key) {
   return key.find("_join") != std::string::npos ||
          key.find("_last_id") != std::string::npos;
 }
 
-bool Coordinator::IsHeartbeatKey(const std::string& key) {
+bool EtcdMaster::IsHeartbeatKey(const std::string& key) {
   const auto key_ending = "/" + chain::kKeyTypeHeartbeat;
   // key ends with key_ending
   return std::equal(key_ending.rbegin(), key_ending.rend(), key.rbegin());

@@ -1,5 +1,5 @@
-#ifndef CREDIS_COORDINATOR_H_
-#define CREDIS_COORDINATOR_H_
+#ifndef CREDIS_ETCD_MASTER_H_
+#define CREDIS_ETCD_MASTER_H_
 
 #include <iostream>
 
@@ -11,13 +11,13 @@
 
 using namespace chain;
 
-class Coordinator {
+class EtcdMaster {
 public:
     struct Options {
         bool auto_add_new_members;
     };
-    explicit Coordinator(std::unique_ptr<etcd::ClientInterface> etcd);
-    Coordinator(std::unique_ptr<etcd::ClientInterface> etcd, Options options);
+    explicit EtcdMaster(std::unique_ptr<etcd::ClientInterface> etcd);
+    EtcdMaster(std::unique_ptr<etcd::ClientInterface> etcd, Options options);
     grpc::Status ManageChain(std::string chain_id);
 private:
   int64_t WriteChain(Chain* chain);
@@ -38,4 +38,4 @@ private:
   // std::string chain_ids;
 };
 
-#endif  // CREDIS_COORDINATOR_H_
+#endif  // CREDIS_ETCD_MASTER_H_
