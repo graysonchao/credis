@@ -32,7 +32,12 @@ RUN cd /credis \
     && cd /credis/glog \
     && cmake . \
     && make -j install \
-    && rm -rf /credis/glog
+    && rm -rf /credis/glog \
+    && cd /credis/gflags \
+    && cmake .. \
+    && make -j \
+    && make -j install \
+    && rm -rf /credis/gflags
 
 # build redis
 RUN cd /credis/redis \
