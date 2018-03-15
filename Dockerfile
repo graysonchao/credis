@@ -13,8 +13,10 @@ RUN apt-get update \
     libgtest-dev \
     pkg-config
 
-RUN git clone -b etcd.coordinator https://github.com/graysonchao/credis /credis \
-    && cd /credis \
+ADD . /
+
+RUN cd /credis \
+    && git submodule deinit --force --all \
     && git submodule update --init \
     && cd /credis/grpc \
     && git submodule update --init \
@@ -35,8 +37,11 @@ RUN git clone -b etcd.coordinator https://github.com/graysonchao/credis /credis 
 # build redis
 RUN cd /credis/redis \
     && env USE_TCMALLOC=yes make -j \
-    && mkdir /credis/build; cd /credis/build ; cmake .. ; make -j  \
-    && cd / \
-    && ln -s /credis/build/src/run_coordinator \
+    && mkdir /credis/build; cd /credis/build ; cmake .. ; make -j
+
+# symlinks and handy scripts
+RUN ln -s /credis/build/src/run_coordinator \
     && ln -s /credis/redis/src/redis-server \
-    && ln -s /credis/redis/src/redis-cli
+    && ln -s /credis/redis/src/redis-cli \
+    && ln -s /credis/build/src/libmember.so \
+    && ln -s /credis/run-member.sh
