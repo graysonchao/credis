@@ -24,4 +24,8 @@ while getopts 'g:m:p:r:H:h' flag; do
   esac
 done
 
-redis-server --protected-mode no --loadmodule $module_path/libmember.so $hostname $port --port $port
+if [[ -f 'redis-server' ]]; then
+  ./redis-server --protected-mode no --loadmodule $module_path/libmember.so $hostname $port --port $port
+else
+  redis-server --protected-mode no --loadmodule $module_path/libmember.so $hostname $port --port $port
+fi
