@@ -13,28 +13,34 @@ RUN apt-get update \
     libgtest-dev \
     pkg-config
 
-ADD . /
+ADD . /credis
 
 RUN cd /credis \
-    && git submodule deinit --force --all \
-    && git submodule update --init \
-    && cd /credis/grpc \
+    && git submodule deinit -f . \
+    && git submodule update --init 
+
+RUN cd /credis/grpc \
     && git submodule update --init \
     && make -j4 \
+    && make -j install
+
+RUN  cd /credis/grpc/third_party/protobuf \
     && make -j install \
-    && cd /credis/grpc/third_party/protobuf \
-    && make -j install \
-    && rm -rf /credis/grpc \
-    && cd /credis/protos \
-    && make \
-    && cd /credis/leveldb \
-    && CXXFLAGS=-fPIC make -j \
-    && cd /credis/glog \
+    && rm -rf /credis/grpc
+
+RUN cd /credis/protos \
+    && make
+
+RUN cd /credis/leveldb \
+    && CXXFLAGS=-fPIC make -j
+
+RUN cd /credis/glog \
     && cmake . \
     && make -j install \
-    && rm -rf /credis/glog \
-    && cd /credis/gflags \
-    && cmake .. \
+    && rm -rf /credis/glog
+
+RUN cd /credis/gflags \
+    && mkdir build_; cd build_; cmake .. \
     && make -j \
     && make -j install \
     && rm -rf /credis/gflags
