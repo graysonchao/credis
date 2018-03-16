@@ -13,11 +13,11 @@ RUN apt-get update \
     libgtest-dev \
     pkg-config
 
-ADD . /credis
+RUN git clone -b etcd.coordinator https://github.com/graysonchao/credis
 
 RUN cd /credis \
     && git submodule deinit -f . \
-    && git submodule update --init 
+    && git submodule update --init
 
 RUN cd /credis/grpc \
     && git submodule update --init \
@@ -45,13 +45,19 @@ RUN cd /credis/gflags \
     && make -j install \
     && rm -rf /credis/gflags
 
-# build redis
 RUN cd /credis/redis \
-    && env USE_TCMALLOC=yes make -j \
-    && mkdir /credis/build; cd /credis/build ; cmake .. ; make -j
+    && env USE_TCMALLOC=yes make -j
+
+# build credis itself
+# the second pull is to get updates to the code w/o rebuilding third party deps.
+RUN cd /credis \
+    && git pull && mkdir /credis/build \
+    && cd /credis/build \
+    && cmake .. \
+    && make -j
 
 # symlinks and handy scripts
-RUN ln -s /credis/build/src/run_coordinator \
+RUN ln -s /credis/build/src/run_etcd_master \
     && ln -s /credis/redis/src/redis-server \
     && ln -s /credis/redis/src/redis-cli \
     && ln -s /credis/build/src/libmember.so \

@@ -1,7 +1,8 @@
 version: '3'
 services:
     client:
-        image: graysonchao/credis
+        build: .
+        # image: graysonchao/credis:latest
         # hack to just stay alive and do nothing
         command: tail -f /var/log/bootstrap.log
     etcd:
@@ -10,10 +11,12 @@ services:
         ports:
             - "2379"
     master:
-        image: graysonchao/credis
+        build: .
+        #image: graysonchao/credis:latest
         command: tail -f /var/log/bootstrap.log
     member:
-        image: graysonchao/credis
+        build: .
+        # image: graysonchao/credis:latest
         command: /bin/bash -c "/run-member.sh -m /credis/build/src -p 6379"
         ports:
         - "6379"
