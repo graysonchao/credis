@@ -35,7 +35,7 @@ class ClientInterface {
   // Get a range of keys, which can also be a single key or the set of all keys
   // matching a prefix.
   virtual grpc::Status Range(const RangeRequest &request,
-                             RangeResponse *response) = 0;
+                             RangeResponse *response) const = 0;
 
   // Create a watch stream, which is a bidirectional GRPC stream where the
   // client receives all change events to the requested keys.
@@ -76,7 +76,7 @@ class Client : public ClientInterface {
   grpc::Status Put(const PutRequest &request, PutResponse *response) override;
 
   grpc::Status Range(const RangeRequest& request,
-                     RangeResponse* response) override;
+                     RangeResponse* response) const override;
 
   WatchStreamPtr MakeWatchStream(const WatchRequest& req) override;
 

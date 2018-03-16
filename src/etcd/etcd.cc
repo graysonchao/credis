@@ -56,7 +56,8 @@ grpc::Status etcd::Client::Put(const PutRequest& req, PutResponse* res) {
  * @param revision (latest by default)
  * @return
  */
-grpc::Status etcd::Client::Range(const RangeRequest& req, RangeResponse* res) {
+grpc::Status etcd::Client::Range(const RangeRequest& req,
+                                 RangeResponse* res) const {
   grpc::ClientContext context;
   return kv_stub_->Range(&context, req, res);
 }

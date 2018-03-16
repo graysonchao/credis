@@ -20,28 +20,7 @@ EtcdMaster::EtcdMaster(std::unique_ptr<etcd::ClientInterface> etcd)
     : etcd_(std::move(etcd)), options_(kDefaultOptions) {}
 
 grpc::Status EtcdMaster::ManageChain(std::string chain_id) {
-  auto chain_prefix = kKeyPrefix + ":" + chain_id;
-  RangeResponse res;
-  auto status = etcd::util::ExponentialBackoff(
-      [this, chain_prefix, &res]() -> grpc::Status {
-        RangeRequest req;
-        req.set_key(chain_prefix);
-        req.set_range_end(etcd::util::RangePrefix(chain_prefix));
-        return etcd_->Range(req, &res);
-      }
-  );
-
-  CHECK(status.ok()) << "Could not get chain state within timeout.";
-  Chain chain(kKeyPrefix, chain_id);
-  for (auto &kv: res.kvs()) {
-    if (IsHeartbeatKey(kv.key())) {
-      MemberKey key(kv.key());
-      chain::Member new_member(key.member_id);
-      new_member.heartbeat = MemberHeartbeat(kv.value());
-      chain.AddMember(new_member);
-    }
-  }
-  LOG(INFO) << "Managing " << chain_prefix;
+  auto chain = ReadChain(*etcd_, chain_id);
   return ListenForChanges(&chain);
 }
 
@@ -118,6 +97,32 @@ grpc::Status EtcdMaster::ListenForChanges(Chain *chain) {
   LOG(ERROR) << "Watch canceled."
              << " etcd gave this cancel reason: " << watch_res.cancel_reason();
   return grpc::Status::CANCELLED;
+}
+
+Chain EtcdMaster::ReadChain(const etcd::ClientInterface& etcd,
+                                   std::string chain_id) {
+  auto chain_prefix = kKeyPrefix + ":" + chain_id;
+  RangeResponse res;
+  auto status = etcd::util::ExponentialBackoff(
+      [&etcd, chain_prefix, &res]() -> grpc::Status {
+        RangeRequest req;
+        req.set_key(chain_prefix);
+        req.set_range_end(etcd::util::RangePrefix(chain_prefix));
+        return etcd.Range(req, &res);
+      }
+  );
+
+  CHECK(status.ok()) << "Could not get chain state within timeout.";
+  Chain chain(kKeyPrefix, chain_id);
+  for (auto &kv: res.kvs()) {
+    if (IsHeartbeatKey(kv.key())) {
+      MemberKey key(kv.key());
+      chain::Member new_member(key.member_id);
+      new_member.heartbeat = MemberHeartbeat(kv.value());
+      chain.AddMember(new_member);
+    }
+  }
+  return chain;
 }
 
 // Write intended configs based on the given chain to etcd. Removes dead

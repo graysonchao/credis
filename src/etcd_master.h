@@ -12,19 +12,21 @@
 using namespace chain;
 
 class EtcdMaster {
-public:
-    struct Options {
-        bool auto_add_new_members;
-    };
-    explicit EtcdMaster(std::unique_ptr<etcd::ClientInterface> etcd);
-    EtcdMaster(std::unique_ptr<etcd::ClientInterface> etcd, Options options);
-    grpc::Status ManageChain(std::string chain_id);
-private:
+ public:
+  struct Options {
+    bool auto_add_new_members;
+  };
+  explicit EtcdMaster(std::unique_ptr<etcd::ClientInterface> etcd);
+  EtcdMaster(std::unique_ptr<etcd::ClientInterface> etcd, Options options);
+  grpc::Status ManageChain(std::string chain_id);
+  static Chain ReadChain(const etcd::ClientInterface& etcd,
+                         std::string chain_id);
+  static bool IsSystemKey(const std::string& key);
+  static bool IsHeartbeatKey(const std::string& key);
+ private:
   int64_t WriteChain(Chain* chain);
   grpc::Status ListenForChanges(Chain* chain);
 
-  bool IsSystemKey(const std::string& key);
-  bool IsHeartbeatKey(const std::string& key);
   static const std::string kKeyPrefix;
   static const std::string kKeyTypeHeartbeat;
 
