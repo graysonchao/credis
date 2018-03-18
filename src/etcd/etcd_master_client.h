@@ -1,9 +1,13 @@
-#ifndef CREDIS_REDIS_MASTER_CLIENT_H
-#define CREDIS_REDIS_MASTER_CLIENT_H
+#ifndef CREDIS_ETCD_MASTER_CLIENT_H
+#define CREDIS_ETCD_MASTER_CLIENT_H
 
-#include "master_client.h"
+#include "grpcpp/grpcpp.h"
+#include "src/master_client.h"
+#include "etcd_utils.h"
 
-class RedisMasterClient : public MasterClient {
+using Watermark = MasterClient::Watermark;
+
+class EtcdMasterClient : public MasterClient {
  public:
   virtual Status Connect(const std::string& url) override;
   virtual Status Head(std::string* address, int* port) override;
@@ -13,7 +17,8 @@ class RedisMasterClient : public MasterClient {
 
  private:
   virtual const char* WatermarkKey(Watermark w) const override;
-  std::unique_ptr<redisContext> redis_context_;
+  std::shared_ptr<grpc::Channel> channel_;
+  utils::EtcdURL url_;
 };
 
-#endif //CREDIS_REDIS_MASTER_CLIENT_H
+#endif //CREDIS_ETCD_MASTER_CLIENT_H

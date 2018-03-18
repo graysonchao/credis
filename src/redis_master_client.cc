@@ -6,7 +6,9 @@ const char* RedisMasterClient::WatermarkKey(Watermark w) const {
   return w == MasterClient::Watermark::kSnCkpt ? "_sn_ckpt" : "_sn_flushed";
 }
 
-Status RedisMasterClient::Connect(const std::string& address, int port) {
+Status RedisMasterClient::Connect(const std::string& url) {
+  auto address = url.substr(0, url.find_first_of(":"));
+  int port = std::stoi(url.substr(url.find_first_of(":") + 1));
   redis_context_.reset(SyncConnect(address, port));
   return Status::OK();
 }

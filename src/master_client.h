@@ -25,7 +25,7 @@ class MasterClient {
     kSnFlushed = 1,
   };
 
-  virtual Status Connect(const std::string& address, int port) = 0;
+  virtual Status Connect(const std::string& url) = 0;
 
   // TODO(zongheng): impl.
   // Retries the current head and tail nodes (for writes and reads,
