@@ -571,6 +571,29 @@ int Put(RedisModuleCtx* ctx,
   return REDISMODULE_OK;
 }
 
+// Resend all unacked updates.
+int MemberResendUnacked_RedisCommand(RedisModuleCtx* ctx,
+                             RedisModuleString** argv,
+                             int argc) {
+  if (argc != 1) return RedisModule_WrongArity(ctx);
+  auto& sn_to_key = module.sn_to_key();
+  for (auto sn : module.sent()) {
+    auto sn_string = std::to_string(sn);
+    std::string key = sn_to_key[sn];
+    KeyReader reader(ctx, key);
+    size_t size;
+    const char* value = reader.value(&size);
+    if (!module.child()->err) {
+      const int status = redisAsyncCommand(
+          module.child(), NULL, NULL, "MEMBER.PROPAGATE %b %b %b %s",
+          key.data(), key.size(), value, size, sn_string.data(),
+          sn_string.size(), /*is_flush=*/kStringZero);
+      // TODO(zongheng): check status.
+    }
+  }
+  return RedisModule_ReplyWithNull(ctx);
+}
+
 // Set the role, successor and predecessor of this server.
 // Each of the arguments can be the empty string, in which case it is not set.
 //
@@ -1273,6 +1296,14 @@ int RedisModule_OnLoad(RedisModuleCtx* ctx,
   }
   if (RedisModule_CreateCommand(ctx, "MEMBER.SN", MemberSn_RedisCommand,
                                 "readonly",
+                                /*firstkey=*/-1, /*lastkey=*/-1,
+                                /*keystep=*/0) == REDISMODULE_ERR) {
+    return REDISMODULE_ERR;
+  }
+
+  if (RedisModule_CreateCommand(ctx, "MEMBER.RESEND_UNACKED",
+                                MemberResendUnacked_RedisCommand,
+                                "write",
                                 /*firstkey=*/-1, /*lastkey=*/-1,
                                 /*keystep=*/0) == REDISMODULE_ERR) {
     return REDISMODULE_ERR;
