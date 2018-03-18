@@ -35,7 +35,10 @@ add_library(utils STATIC utils.cc)
 target_compile_options(utils PUBLIC ${REDIS_MODULE_CFLAGS} -fPIC)
 
 # master_client
-add_library(master_client STATIC master_client.cc)
+set(MASTER_CLIENT_IMPLS
+        redis_master_client.cc
+)
+add_library(master_client STATIC ${MASTER_CLIENT_IMPLS})
 target_compile_options(master_client PUBLIC ${REDIS_MODULE_CFLAGS} -fPIC)
 target_link_libraries(master_client ${LevelDB_LIBRARIES})
 target_link_libraries(master_client glog::glog)

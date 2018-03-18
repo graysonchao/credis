@@ -26,6 +26,7 @@ extern "C" {
 #include "leveldb/write_batch.h"
 
 #include "master_client.h"
+#include "redis_master_client.h"
 #include "utils.h"
 
 const char* const kCheckpointPath =

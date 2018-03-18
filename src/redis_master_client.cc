@@ -1,16 +1,14 @@
-#include "master_client.h"
-
+#include "redis_master_client.h"
 #include "glog/logging.h"
-
 #include "utils.h"
+
+const char* RedisMasterClient::WatermarkKey(Watermark w) const {
+  return w == MasterClient::Watermark::kSnCkpt ? "_sn_ckpt" : "_sn_flushed";
+}
 
 Status RedisMasterClient::Connect(const std::string& address, int port) {
   redis_context_.reset(SyncConnect(address, port));
   return Status::OK();
-}
-
-const char* MasterClient::WatermarkKey(Watermark w) const {
-  return w == MasterClient::Watermark::kSnCkpt ? "_sn_ckpt" : "_sn_flushed";
 }
 
 Status RedisMasterClient::GetWatermark(Watermark w, int64_t* val) const {
@@ -22,14 +20,14 @@ Status RedisMasterClient::GetWatermark(Watermark w, int64_t* val) const {
 
   if (reply_type == REDIS_REPLY_NIL) {
     switch (w) {
-    case Watermark::kSnCkpt:
-      *val = kSnCkptInit;
-      break;
-    case Watermark::kSnFlushed:
-      *val = kSnFlushedInit;
-      break;
-    default:
-      return Status::InvalidArgument("Watermark type incorrect");
+      case Watermark::kSnCkpt:
+        *val = kSnCkptInit;
+        break;
+      case Watermark::kSnFlushed:
+        *val = kSnFlushedInit;
+        break;
+      default:
+        return Status::InvalidArgument("Watermark type incorrect");
     }
     return Status::OK();
   }
@@ -62,3 +60,4 @@ Status RedisMasterClient::Tail(std::string* address, int* port) {
   CHECK(false) << "Not implemented";
   return Status::NotSupported("Not implemented");
 }
+
