@@ -1,9 +1,9 @@
 #ifndef CREDIS_ETCD_MASTER_CLIENT_H
 #define CREDIS_ETCD_MASTER_CLIENT_H
 
+#include "etcd_utils.h"
 #include "grpcpp/grpcpp.h"
 #include "src/master_client.h"
-#include "etcd_utils.h"
 
 using Watermark = MasterClient::Watermark;
 
@@ -21,4 +21,4 @@ class EtcdMasterClient : public MasterClient {
   utils::EtcdURL url_;
 };
 
-#endif //CREDIS_ETCD_MASTER_CLIENT_H
+#endif  // CREDIS_ETCD_MASTER_CLIENT_H

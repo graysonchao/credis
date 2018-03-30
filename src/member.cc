@@ -11,16 +11,16 @@ extern "C" {
 #include "hiredis/adapters/ae.h"
 #include "hiredis/async.h"
 #include "hiredis/hiredis.h"
-#include "redis/src/redismodule.h"
 #include "redis/src/ae.h"
+#include "redis/src/redismodule.h"
 }
 
+#include "etcd/etcd_master_client.h"
 #include "glog/logging.h"
 #include "leveldb/db.h"
 #include "leveldb/write_batch.h"
 #include "master_client.h"
 #include "redis_master_client.h"
-#include "etcd/etcd_master_client.h"
 #include "utils.h"
 
 const char* const kCheckpointPath =
@@ -50,8 +50,7 @@ struct HeartbeatInfo {
 } hb_info;
 
 // This is an instance of aeTimeProc.
-int heartbeat(aeEventLoop* loop, long long id, void *hb_info_ptr) {
-
+int heartbeat(aeEventLoop* loop, long long id, void* hb_info_ptr) {
   auto current_hb = ((HeartbeatInfo*) hb_info_ptr);
 
   // Ensure that at least 1/2 of the heartbeat interval has really elapsed
@@ -70,10 +69,10 @@ int heartbeat(aeEventLoop* loop, long long id, void *hb_info_ptr) {
   req.set_id(current_hb->lease_id);
   etcd3::pb::LeaseKeepAliveResponse res;
   auto status = etcd.LeaseKeepAlive(req, &res);
-  CHECK(status.ok())
-  << "Failed to KeepAlive lease " << current_hb->lease_id << ". "
-  << "GRPC error " << status.error_code() << ": "
-  << status.error_message();
+  CHECK(status.ok()) << "Failed to KeepAlive lease " << current_hb->lease_id
+                     << ". "
+                     << "GRPC error " << status.error_code() << ": "
+                     << status.error_message();
 
   return 0;
 }
@@ -185,12 +184,12 @@ class RedisChainModule {
   }
   std::string MasterModeString() const {
     switch (master_mode_) {
-      case MasterMode::kRedis:
-        return "kRedis";
-      case MasterMode::kEtcd:
-        return "kEtcd";
-      default:
-        CHECK(false);
+    case MasterMode::kRedis:
+      return "kRedis";
+    case MasterMode::kEtcd:
+      return "kEtcd";
+    default:
+      CHECK(false);
     }
   }
 
@@ -200,14 +199,14 @@ class RedisChainModule {
         master_mode_(MasterMode::kRedis),
         parent_(NULL),
         child_(NULL) {
-    switch(master_mode_) {
-      case MasterMode::kRedis:
-        master_client_ = std::unique_ptr<MasterClient>(new RedisMasterClient());
-        break;
-      case MasterMode::kEtcd:
-        master_client_ = std::unique_ptr<MasterClient>(new EtcdMasterClient());
-      default:
-        CHECK(false) << "Unrecognized master mode " << MasterModeString();
+    switch (master_mode_) {
+    case MasterMode::kRedis:
+      master_client_ = std::unique_ptr<MasterClient>(new RedisMasterClient());
+      break;
+    case MasterMode::kEtcd:
+      master_client_ = std::unique_ptr<MasterClient>(new EtcdMasterClient());
+    default:
+      CHECK(false) << "Unrecognized master mode " << MasterModeString();
     }
   }
 
@@ -305,8 +304,8 @@ class RedisChainModule {
                               std::string own_addr,
                               int own_port,
                               aeEventLoop* el) {
-    auto channel = grpc::CreateChannel(url.address,
-                                       grpc::InsecureChannelCredentials());
+    auto channel =
+        grpc::CreateChannel(url.address, grpc::InsecureChannelCredentials());
     etcd3::Client etcd(channel);
 
     // Establish heartbeat.
@@ -357,7 +356,7 @@ class RedisChainModule {
   ChainRole chain_role_;
   enum GcsMode gcs_mode_;
   enum MasterMode master_mode_;
-  bool gcs_mode_initialized_ = false;  // To guard against re-initialization.
+  bool gcs_mode_initialized_ = false;     // To guard against re-initialization.
   bool master_mode_initialized_ = false;  // To guard against re-initialization.
 
   // The previous node in the chain (or NULL if none)
@@ -434,8 +433,8 @@ int DoFlush(RedisModuleCtx* ctx,
 
   // Done, or propagate.  We do this even if flushable_keys is empty.
   if (module.ActAsTail()) {
-    Status s = module.Master()->SetWatermark(MasterClient::Watermark::kSnFlushed,
-                                            advanced_sn_flushed);
+    Status s = module.Master()->SetWatermark(
+        MasterClient::Watermark::kSnFlushed, advanced_sn_flushed);
     HandleNonOk(ctx, s);
   } else {
     // Propagate: Child.MemberFlush(advanced_sn_flushed, flushable_keys).
@@ -482,7 +481,8 @@ int Put(RedisModuleCtx* ctx,
     // The tail has the responsibility of updating the sn_flushed watermark.
     if (module.ActAsTail()) {
       // "sn + 1" is the next sn to be flushed.
-      module.Master()->SetWatermark(MasterClient::Watermark::kSnFlushed, sn + 1);
+      module.Master()->SetWatermark(MasterClient::Watermark::kSnFlushed,
+                                    sn + 1);
     }
     RedisModule_CloseKey(key);
   } else {
@@ -947,7 +947,7 @@ int TailCheckpoint_RedisCommand(RedisModuleCtx* ctx,
   HandleNonOk(ctx, s);
 
   s = module.Master()->SetWatermark(MasterClient::Watermark::kSnCkpt,
-                                   sn_latest + 1);
+                                    sn_latest + 1);
   HandleNonOk(ctx, s);
 
   const int64_t num_checkpointed = sn_latest - sn_ckpt + 1;
@@ -1160,9 +1160,7 @@ int RedisModule_OnLoad(RedisModuleCtx* ctx,
   default:
     return REDISMODULE_ERR;
   }
-  RedisModule_Log(ctx,
-                  "notice",
-                  "GCS mode: %s",
+  RedisModule_Log(ctx, "notice", "GCS mode: %s",
                   module.GcsModeString().c_str());
 
   long long master_mode = 0;
@@ -1171,18 +1169,16 @@ int RedisModule_OnLoad(RedisModuleCtx* ctx,
              RedisModule_StringToLongLong(argv[1], &master_mode));
   }
   switch (master_mode) {
-    case 0:
-      module.SetMasterMode(RedisChainModule::MasterMode::kRedis);
-      break;
-    case 1:
-      module.SetMasterMode(RedisChainModule::MasterMode::kEtcd);
-      break;
-    default:
-      return REDISMODULE_ERR;
+  case 0:
+    module.SetMasterMode(RedisChainModule::MasterMode::kRedis);
+    break;
+  case 1:
+    module.SetMasterMode(RedisChainModule::MasterMode::kEtcd);
+    break;
+  default:
+    return REDISMODULE_ERR;
   }
-  RedisModule_Log(ctx,
-                  "notice",
-                  "Master mode: %s",
+  RedisModule_Log(ctx, "notice", "Master mode: %s",
                   module.MasterModeString().c_str());
 
   // Register all commands.
