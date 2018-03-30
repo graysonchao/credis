@@ -268,7 +268,7 @@ def test_dead_old_tail_when_adding(startcredis):
     proc.kill()
 
 
-def test_etcd_kill_middle():
+def test_etcd_kill_middle(startcredis_etcdonly):
     """ Test that if the middle node is removed, the tail continues to get updates
     once the chain is repaired.
     """
@@ -296,7 +296,7 @@ def test_etcd_kill_middle():
     Check(ops_completed.value)
 
 
-def test_etcd_heartbeat_timeout():
+def test_etcd_heartbeat_timeout(startcredis_etcdonly):
     """ Test that failure is detected and repaired within a heartbeat timeout.
     """
     # Start members with a quick heartbeat timeout.
@@ -324,7 +324,7 @@ def test_etcd_heartbeat_timeout():
     Check(ops_completed.value)
 
 
-def test_etcd_master_recovery():
+def test_etcd_master_recovery(startcredis_etcdonly):
     """ Test that the master can recover its state from etcd.
     """
     common.Start(
@@ -355,10 +355,10 @@ def test_etcd_master_recovery():
     new_node.kill()
 
 
-def test_etcd_master_online_recovery():
-    """ Test that SeqPut succeeds when the master is killed and restarted
-    mid-stream, then a failure happens.  The restarted master should be able to
-    recover the chain.
+def test_etcd_master_online_recovery(startcredis_etcdonly):
+    """ Test that SeqPut succeeds when the master is killed and restarted mid-way, then a member is
+    killed, then a member is added. The restarted master should be able to recover the chain, with
+    the new member being the tail, and no updates should be lost.
     """
     common.Start(
         chain=common.MakeChain(3),
@@ -380,8 +380,7 @@ def test_etcd_master_online_recovery():
 
     time.sleep(0.1)
     middle_port = common.PortForNode(1)
-    common.KillNode(index=1)
-    master_client.execute_command("MASTER.REMOVE", "127.0.0.1", middle_port)
+    common.KillNode(index=1, notify=master_client)
     assert len(master_client.execute_command('MASTER.GET_CHAIN')) == 2
 
     new_node, _ = common.AddNode(master_client, master_mode=MASTER_ETCD)
@@ -390,6 +389,45 @@ def test_etcd_master_online_recovery():
     assert len(master_client.execute_command('MASTER.GET_CHAIN')) == 3
 
     # Heartbeat should expire within 2 sec.
+    driver.join()
+
+    assert ops_completed.value == n
+    Check(ops_completed.value)
+
+    # Cleanup
+    new_node.kill()
+
+
+def test_etcd_kill_node_while_master_is_dead(startcredis_etcdonly):
+    """ Test that SeqPut succeeds when the master is killed and a node is killed WHILE the master is
+    dead. The master is then restarted. No updates should be lost.
+
+    TODO: Fails (3/28) because members are not checked for liveness when the master starts up.
+    """
+    # Choose a long heartbeat timeout so that the master never receives heartbeat expiry notifs.
+    common.Start(
+        chain=common.MakeChain(3),
+        master_mode=MASTER_ETCD,
+        heartbeat_interval=1,
+        heartbeat_timeout=999)
+
+    # Launch driver thread. Note that it will take a minimum of 10 seconds.
+    n = 10
+    sleep_secs = 1
+    driver = multiprocessing.Process(target=SeqPut, args=(n, sleep_secs))
+    driver.start()
+
+    time.sleep(0.1)
+    common.KillMaster()
+    common.KillNode(index=1)
+    common.StartMaster(master_mode=MASTER_ETCD)
+    time.sleep(0.2)
+    assert len(master_client.execute_command('MASTER.GET_CHAIN')) == 2
+
+    new_node, _ = common.AddNode(master_client, master_mode=MASTER_ETCD)
+    time.sleep(0.1)
+    assert len(master_client.execute_command('MASTER.GET_CHAIN')) == 3
+
     driver.join()
 
     assert ops_completed.value == n

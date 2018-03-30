@@ -49,10 +49,10 @@ def KillNode(index=None, port=None, stateless=False, notify=None):
     if port is None:
         assert index >= 0 and index < len(
             PORTS) - 1, "index %d num_chain_nodes %d" % (index, len(PORTS) - 1)
-        assert index == 0 or index == len(
-            PORTS
-        ) - 2, "middle node failure is not handled, index %d, len %d" % (
-            index, len(PORTS))
+        # assert index == 0 or index == len(
+        #     PORTS
+        # ) - 2, "middle node failure is not handled, index %d, len %d" % (
+        #     index, len(PORTS))
         port_to_kill = PORTS[index + 1]
     else:
         port_to_kill = port
@@ -169,6 +169,11 @@ def Start(request=None, chain=INIT_PORTS, gcs_mode=GCS_NORMAL, master_mode=MASTE
 def startcredis(request):
     Start(request, master_mode=request.param)
     return {'master_mode': request.param}
+
+@pytest.fixture()
+def startcredis_etcdonly(request):
+    Start(request, master_mode=MASTER_ETCD)
+    return {'master_mode': MASTER_ETCD}
 
 def AckClient():
     return redis.StrictRedis("127.0.0.1", PORTS[-1])
