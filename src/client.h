@@ -41,11 +41,17 @@ class RedisCallbackManager {
   std::unordered_map<int64_t, std::unique_ptr<RedisCallback>> callbacks_;
 };
 
+struct RedisAddress {
+  std::string host;
+  int port;
+};
+
 class RedisClient {
  public:
   RedisClient() {}
   ~RedisClient();
   // TODO: this should really be (addr, port) pairs.
+  Status Connect(RedisAddress write_addr, RedisAddress ack_addr);
   // Allows using different ports for write and ack.
   Status Connect(const std::string& address, int write_port, int ack_port);
   // Use the same port for both write and ack.

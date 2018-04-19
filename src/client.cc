@@ -65,19 +65,17 @@ Status ConnectContext(const std::string& address,
 }
 }  // namespace
 
-Status RedisClient::Connect(const std::string& address,
-                            int write_port,
-                            int ack_port) {
+Status RedisClient::Connect(RedisAddress write_addr, RedisAddress ack_addr) {
   int connection_attempts = 0;
-  context_ = redisConnect(address.c_str(), write_port);
+  context_ = redisConnect(write_addr.host.c_str(), write_addr.port);
   while (context_ == nullptr || context_->err) {
     if (connection_attempts >= kRedisDBConnectRetries) {
       if (context_ == nullptr) {
         LOG(ERROR) << "Could not allocate redis context.";
       }
       if (context_->err) {
-        LOG(ERROR) << "Could not establish connection to redis " << address
-                   << ":" << write_port;
+        LOG(ERROR) << "Could not establish connection to redis "
+                   << write_addr.host << ":" << write_addr.port;
       }
       CHECK(0);
       break;
@@ -85,7 +83,7 @@ Status RedisClient::Connect(const std::string& address,
     LOG(ERROR) << "Failed to connect to Redis, retrying.";
     // Sleep for a little.
     usleep(kRedisDBWaitMilliseconds * 1000);
-    context_ = redisConnect(address.c_str(), write_port);
+    context_ = redisConnect(write_addr.host.c_str(), write_addr.port);
     connection_attempts += 1;
   }
   redisReply* reply = reinterpret_cast<redisReply*>(
@@ -93,10 +91,17 @@ Status RedisClient::Connect(const std::string& address,
   REDIS_CHECK_ERROR(context_, reply);
 
   // Connect to async contexts.
-  CHECK(ConnectContext(address, write_port, &write_context_).ok());
-  CHECK(ConnectContext(address, ack_port, &read_context_).ok());
-  CHECK(ConnectContext(address, ack_port, &ack_subscribe_context_).ok());
+  CHECK(ConnectContext(write_addr.host, write_addr.port, &write_context_).ok());
+  CHECK(ConnectContext(ack_addr.host, ack_addr.port, &read_context_).ok());
+  CHECK(ConnectContext(ack_addr.host, ack_addr.port, &ack_subscribe_context_)
+            .ok());
   return Status::OK();
+}
+
+Status RedisClient::Connect(const std::string& address,
+                            int write_port,
+                            int ack_port) {
+  return RedisClient::Connect({address, write_port}, {address, ack_port});
 }
 
 Status RedisClient::Connect(const std::string& address, int port) {

@@ -210,17 +210,24 @@ int main(int argc, char** argv) {
   int num_chain_nodes = 1;
   if (argc > 1) num_chain_nodes = std::stoi(argv[1]);
   if (argc > 2) kWriteRatio = std::stod(argv[2]);
-  std::string server = "127.0.0.1";
-  if (argc > 3) server = std::string(argv[3]);
+  std::string write_server = "127.0.0.1";
+  if (argc > 3) write_server = std::string(argv[3]);
+  std::string ack_server = write_server;
+  if (argc > 4) ack_server = std::string(argv[4]);
   // Set up "write_port" and "ack_port".
   const int write_port = 6370;
   const int ack_port = write_port + num_chain_nodes - 1;
-  LOG(INFO) << "num_chain_nodes " << num_chain_nodes << " write_port "
-            << write_port << " ack_port " << ack_port << " write_ratio "
-            << kWriteRatio << " server " << server;
+  LOG(INFO) << "num_chain_nodes " << num_chain_nodes
+            << " write_ratio " << kWriteRatio
+            << " write_port " << write_port
+            << " ack_port " << ack_port
+            << " write server " << write_server
+            << " ack server " << ack_server;
 
   RedisClient client;
-  CHECK(client.Connect(server, write_port, ack_port).ok());
+  RedisAddress write_addr = {write_server, write_port};
+  RedisAddress ack_addr = {ack_server, ack_port};
+  CHECK(client.Connect(write_addr, ack_addr).ok());
   CHECK(client.AttachToEventLoop(loop).ok());
   CHECK(client
             .RegisterAckCallback(
