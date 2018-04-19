@@ -4,7 +4,7 @@
 #include <thread>
 #include <unordered_set>
 
-#include "gflags/gflags.h"
+#include <gflags/gflags.h>
 #include "glog/logging.h"
 
 #include "client.h"
