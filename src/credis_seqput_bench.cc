@@ -10,6 +10,8 @@
 #include "client.h"
 #include "timer.h"
 
+// Command-line flags
+DEFINE_int32(num_ops, 1000000, "Number of operations to do");
 DEFINE_int32(num_nodes, 1, "Number of chain nodes to use");
 DEFINE_double(write_ratio, 0.5, "Write ratio (0.0 - 1.0)");
 DEFINE_string(write_address, "127.0.0.1", "Address of write instance");
@@ -18,6 +20,7 @@ DEFINE_string(ack_address, "127.0.0.1", "Address of read/ack instance");
 DEFINE_int32(ack_port,
              FLAGS_write_port + FLAGS_num_nodes - 1,
              "Port of read/ack instance");
+DEFINE_string(stats_file, "/dev/null", "File to write detailed timing stats");
 
 // TODO(zongheng): timeout should be using exponential backoff and/or some
 // randomization; this is critical in distributed settings (e.g., multiple
@@ -30,8 +33,6 @@ DEFINE_int32(ack_port,
 //
 // If "2" is omitted in the above, by default 1 server is used.
 
-const int N = 1000000;
-// const int N = 500000;
 aeEventLoop* loop = aeCreateEventLoop(64);
 int writes_completed = 0;
 int reads_completed = 0;
@@ -39,7 +40,6 @@ Timer reads_timer, writes_timer;
 std::string last_issued_read_key;
 // Randomness.
 std::default_random_engine re;
-double kWriteRatio = 1.0;
 
 const long long kRetryTimerMillisecs = 100;  // For ae's timer.
 double last_unacked_timestamp = -1;
@@ -66,7 +66,7 @@ void AsyncGet();
 void AsyncRandomCommand() {
   static std::uniform_real_distribution<double> unif(0.0, 1.0);
   const double r = unif(re);
-  if (r < kWriteRatio || writes_completed == 0) {
+  if (r < FLAGS_write_ratio || writes_completed == 0) {
     AsyncPut(/*is_retry=*/false);
   } else {
     AsyncGet();
@@ -75,10 +75,10 @@ void AsyncRandomCommand() {
 
 void OnCompleteLaunchNext(Timer* timer, int* cnt, int other_cnt) {
   // Sometimes an ACK comes back late, just ignore if we're done.
-  if (*cnt + other_cnt >= N) return;
+  if (*cnt + other_cnt >= FLAGS_num_ops) return;
   ++(*cnt);
   timer->TimeOpEnd(*cnt);
-  if (*cnt + other_cnt == N) {
+  if (*cnt + other_cnt == FLAGS_num_ops) {
     aeStop(loop);
     return;
   }
@@ -217,12 +217,12 @@ int RetryPutTimer(aeEventLoop* loop, long long /*timer_id*/, void*) {
 
 int main(int argc, char** argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
-  kWriteRatio = FLAGS_write_ratio;
+  FLAGS_write_ratio = FLAGS_write_ratio;
   std::string write_address = FLAGS_write_address;
   const int write_port = FLAGS_write_port;
   std::string ack_address = FLAGS_ack_address;
   const int ack_port = FLAGS_ack_port;
-  LOG(INFO) << "write ratio: " << kWriteRatio;
+  LOG(INFO) << "write ratio: " << FLAGS_write_ratio;
   LOG(INFO) << "write server: " << write_address;
   LOG(INFO) << "write port: " << write_port;
   LOG(INFO) << "ack server: " << ack_address;
@@ -241,8 +241,8 @@ int main(int argc, char** argv) {
   read_context = client.read_context();
 
   // Timings related.
-  reads_timer.ExpectOps(N);
-  writes_timer.ExpectOps(N);
+  reads_timer.ExpectOps(FLAGS_num_ops);
+  writes_timer.ExpectOps(FLAGS_num_ops);
 
   aeCreateTimeEvent(loop, /*milliseconds=*/kRetryTimerMillisecs, &RetryPutTimer,
                     NULL, NULL);
@@ -259,7 +259,7 @@ int main(int argc, char** argv) {
   // LOG(INFO) << "end loop";
 
   auto end = std::chrono::system_clock::now();
-  CHECK(writes_completed + reads_completed == N);
+  CHECK(writes_completed + reads_completed == FLAGS_num_ops);
   LOG(INFO) << "ending bench";
   const int64_t latency_us =
       std::chrono::duration_cast<std::chrono::microseconds>(end - start)
@@ -274,9 +274,9 @@ int main(int argc, char** argv) {
   double writes_mean = 0, writes_std = 0;
   writes_timer.Stats(&writes_mean, &writes_std);
 
-  LOG(INFO) << "throughput " << N * 1e6 / latency_us
+  LOG(INFO) << "throughput " << FLAGS_num_ops * 1e6 / latency_us
             << " ops/s, total duration (ms) " << latency_us / 1e3 << ", num "
-            << N << ", write_ratio " << kWriteRatio;
+            << FLAGS_num_ops << ", write_ratio " << FLAGS_write_ratio;
   LOG(INFO) << "reads_thput "
             << reads_completed * 1e6 / (reads_mean * reads_completed)
             << " ops/s, total duration(ms) "
@@ -292,10 +292,20 @@ int main(int argc, char** argv) {
             << composite_std;
   LOG(INFO) << "reads_lat (us) mean " << reads_mean << " std " << reads_std;
   LOG(INFO) << "writes_lat (us) mean " << writes_mean << " std " << writes_std;
-  //   {
-  //     std::ofstream ofs("latency.txt");
-  //     for (double x : timer.latency_micros()) ofs << x << std::endl;
-  //   }
+
+  {
+    auto detailed_write_stats = writes_timer.TimeTable();
+    auto detailed_read_stats = reads_timer.TimeTable();
+    std::ofstream ofs(FLAGS_stats_file);
+    ofs << "type,start,end" << std::endl;
+    ofs.setf(std::ios_base::fixed);
+    for (auto times : detailed_write_stats) {
+      ofs << "write," << times.first << "," << times.second << std::endl;
+    }
+    for (auto times : detailed_read_stats) {
+      ofs << "read," << times.first << "," << times.second << std::endl;
+    }
+  }
 
   return 0;
 }

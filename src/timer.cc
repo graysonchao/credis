@@ -77,3 +77,13 @@ std::string Timer::ReportStats(const std::string& name) const {
 
 std::vector<double>& Timer::begin_timestamps() { return begin_timestamps_; }
 std::vector<double>& Timer::latency_micros() { return latency_micros_; }
+
+// Returns a table of start/end times for each request.
+std::vector<std::pair<double, double>> Timer::TimeTable() const {
+  std::vector<std::pair<double, double>> stats(begin_timestamps_.size());
+  for (int i = 0; i < begin_timestamps_.size(); i++) {
+    stats.push_back({begin_timestamps_[i],
+                     begin_timestamps_[i] + latency_micros_[i]});
+  }
+  return stats;
+}

@@ -17,6 +17,8 @@ class Timer {
   void Stats(double* mean, double* std) const;
   std::string ReportStats(const std::string& name) const;
 
+  std::vector<std::pair<double, double>> TimeTable() const;
+
   std::vector<double>& begin_timestamps();
   std::vector<double>& latency_micros();
 
