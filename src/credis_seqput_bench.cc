@@ -4,10 +4,20 @@
 #include <thread>
 #include <unordered_set>
 
+#include "gflags/gflags.h"
 #include "glog/logging.h"
 
 #include "client.h"
 #include "timer.h"
+
+DEFINE_int32(num_nodes, 1, "Number of chain nodes to use");
+DEFINE_double(write_ratio, 0.5, "Write ratio (0.0 - 1.0)");
+DEFINE_string(write_address, "127.0.0.1", "Address of write instance");
+DEFINE_int32(write_port, 6370, "Port of write instance");
+DEFINE_string(ack_address, "127.0.0.1", "Address of read/ack instance");
+DEFINE_int32(ack_port,
+             FLAGS_write_port + FLAGS_num_nodes - 1,
+             "Port of read/ack instance");
 
 // TODO(zongheng): timeout should be using exponential backoff and/or some
 // randomization; this is critical in distributed settings (e.g., multiple
@@ -206,27 +216,21 @@ int RetryPutTimer(aeEventLoop* loop, long long /*timer_id*/, void*) {
 }
 
 int main(int argc, char** argv) {
-  // Parse.
-  int num_chain_nodes = 1;
-  if (argc > 1) num_chain_nodes = std::stoi(argv[1]);
-  if (argc > 2) kWriteRatio = std::stod(argv[2]);
-  std::string write_server = "127.0.0.1";
-  if (argc > 3) write_server = std::string(argv[3]);
-  std::string ack_server = write_server;
-  if (argc > 4) ack_server = std::string(argv[4]);
-  // Set up "write_port" and "ack_port".
-  const int write_port = 6370;
-  const int ack_port = write_port + num_chain_nodes - 1;
-  LOG(INFO) << "num_chain_nodes " << num_chain_nodes
-            << " write_ratio " << kWriteRatio
-            << " write_port " << write_port
-            << " ack_port " << ack_port
-            << " write server " << write_server
-            << " ack server " << ack_server;
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  kWriteRatio = FLAGS_write_ratio;
+  std::string write_address = FLAGS_write_address;
+  const int write_port = FLAGS_write_port;
+  std::string ack_address = FLAGS_ack_address;
+  const int ack_port = FLAGS_ack_port;
+  LOG(INFO) << "write ratio: " << kWriteRatio;
+  LOG(INFO) << "write server: " << write_address;
+  LOG(INFO) << "write port: " << write_port;
+  LOG(INFO) << "ack server: " << ack_address;
+  LOG(INFO) << "ack port: " << ack_port;
 
   RedisClient client;
-  RedisAddress write_addr = {write_server, write_port};
-  RedisAddress ack_addr = {ack_server, ack_port};
+  RedisAddress write_addr = {write_address, write_port};
+  RedisAddress ack_addr = {ack_address, ack_port};
   CHECK(client.Connect(write_addr, ack_addr).ok());
   CHECK(client.AttachToEventLoop(loop).ok());
   CHECK(client
