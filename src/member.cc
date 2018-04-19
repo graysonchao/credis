@@ -58,7 +58,7 @@ int heartbeat(aeEventLoop* loop, long long id, void* hb_info_ptr) {
 
   // Ensure that at least 1/2 of the heartbeat interval has really elapsed
   // since we sent an RPC to etcd. Redis will call this function repeatedly
-  // really fast if it has nothing else to do, DoSing etcd in the process.
+  // really fast if it has nothing else to do, which DoSes etcd in the process.
   auto now = std::chrono::time_point_cast<Ms>(Clock::now());
   auto half_hb = std::chrono::milliseconds{(heartbeatIntervalSec / 2) * 1000};
 
@@ -77,7 +77,7 @@ int heartbeat(aeEventLoop* loop, long long id, void* hb_info_ptr) {
                      << "GRPC error " << status.error_code() << ": "
                      << status.error_message();
 
-  return 0;
+  return heartbeatIntervalSec * 1000;
 }
 
 using Status = leveldb::Status;  // So that it can be easily replaced.
