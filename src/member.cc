@@ -196,6 +196,13 @@ class RedisChainModule {
     }
   }
 
+  std::string GetAdvertiseAddress() const {
+    return advertise_addr_;
+  }
+  void SetAdvertiseAddress(std::string hostname) {
+    advertise_addr_ = hostname;
+  }
+
   RedisChainModule()
       : chain_role_(ChainRole::kSingleton),
         gcs_mode_(GcsMode::kNormal),
@@ -355,6 +362,8 @@ class RedisChainModule {
 
   std::unique_ptr<MasterClient> master_client_;
   std::string master_url_;
+  // Address (127.0.0.1) to advertise to the master.
+  std::string advertise_addr_;
 
   ChainRole chain_role_;
   enum GcsMode gcs_mode_;
@@ -786,11 +795,7 @@ int MemberConnectToMaster_RedisCommand(RedisModuleCtx* ctx,
     Status s = module.ConnectToMaster(master_url);
 
     auto url = SplitEtcdURL(master_url);
-    std::string own_addr = "127.0.0.1";
-    char* bind_addr = getBindAddr();
-    if (bind_addr != NULL) {
-      own_addr = bind_addr;
-    }
+    auto own_addr = module.GetAdvertiseAddress();
     module.StartHeartbeat(url, own_addr, getPort(), getEventLoop());
     if (!s.ok()) return RedisModule_ReplyWithError(ctx, s.ToString().data());
     return RedisModule_ReplyWithSimpleString(ctx, "OK");
@@ -1264,6 +1269,14 @@ int RedisModule_OnLoad(RedisModuleCtx* ctx,
   }
   RedisModule_Log(ctx, "notice", "Master mode: %s",
                   module.MasterModeString().c_str());
+
+  if (argc > 2) {
+    module.SetAdvertiseAddress(ReadString(argv[2]));
+    RedisModule_Log(ctx, "notice", "Advertising as %s to master",
+                    module.GetAdvertiseAddress().c_str());
+  } else {
+    module.SetAdvertiseAddress("127.0.0.1");
+  }
 
   // Register all commands.
 
