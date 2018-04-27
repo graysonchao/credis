@@ -18,7 +18,8 @@ else()
   set(MALLOC_LIBRARY "${CMAKE_SOURCE_DIR}/redis/deps/jemalloc/lib/libjemalloc.a")
 endif()
 
-set(REDIS_MODULE_CFLAGS -W -Wall -fno-common -g -ggdb -std=c++11 -O2)
+#set(REDIS_MODULE_CFLAGS -W -Wall -fno-common -g -ggdb -std=c++11 -O2)
+set(REDIS_MODULE_CFLAGS -W -Wall -fno-common -g -ggdb -std=c++11 -O0)
 if(APPLE)
   set(CMAKE_SHARED_LIBRARY_SUFFIX ".so")
   set(REDIS_MODULE_LDFLAGS "-undefined dynamic_lookup")
@@ -86,7 +87,7 @@ target_link_libraries(credis_seqput_bench glog::glog client
   ${CMAKE_SOURCE_DIR}/redis/deps/hiredis/libhiredis.a
   ${CMAKE_SOURCE_DIR}/redis/src/ae.o
   ${CMAKE_SOURCE_DIR}/redis/src/zmalloc.o
-  ${MALLOC_LIBRARY} timer gflags)
+  ${MALLOC_LIBRARY} timer master_client)
 
 add_executable(redis_parput_bench redis_parput_bench.cc)
 target_link_libraries(redis_parput_bench glog::glog client

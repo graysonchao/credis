@@ -63,6 +63,8 @@ class RedisClient {
                   const char* data,
                   size_t length,
                   int64_t callback_index);
+  Status ReconnectAckContext(const std::string &address, int port,
+                             redisCallbackFn *callback);
 
   // Does not transfer ownership.
   redisContext* context() const { return context_; };
@@ -70,6 +72,10 @@ class RedisClient {
   redisAsyncContext* read_context() const { return read_context_; };
 
  private:
+  // Cache user-supplied loop in case we need to attach new/reconnected contexts
+  // to the loop.  Not owned.
+  aeEventLoop *loop_;
+
   redisContext* context_;
   redisAsyncContext* write_context_;
   redisAsyncContext* read_context_;

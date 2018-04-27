@@ -1,14 +1,35 @@
 #include "redis_master_client.h"
 #include "glog/logging.h"
-#include "utils.h"
+
+extern "C" {
+#include "hiredis/async.h"
+#include "hiredis/hiredis.h"
+}
+
+namespace {
+redisContext *SyncConnect(const std::string &address, int port) {
+  struct timeval timeout = {1, 500000}; // 1.5 seconds
+  redisContext *c = redisConnectWithTimeout(address.c_str(), port, timeout);
+  if (c == NULL || c->err) {
+    if (c) {
+      printf("Connection error: %s\n", c->errstr);
+      redisFree(c);
+    } else {
+      printf("Connection error: can't allocate redis context\n");
+    }
+    std::exit(1);
+  }
+  return c;
+}
+} // namespace
 
 const char* RedisMasterClient::WatermarkKey(Watermark w) const {
   return w == MasterClient::Watermark::kSnCkpt ? "_sn_ckpt" : "_sn_flushed";
 }
 
 Status RedisMasterClient::Connect(const std::string& url) {
-  auto address = url.substr(0, url.find_first_of(":"));
-  int port = std::stoi(url.substr(url.find_first_of(":") + 1));
+  auto address = url.substr(0, url.find_first_of(':'));
+  int port = std::stoi(url.substr(url.find_first_of(':') + 1));
   redis_context_.reset(SyncConnect(address, port));
   return Status::OK();
 }
@@ -55,11 +76,26 @@ Status RedisMasterClient::SetWatermark(Watermark w, int64_t new_val) {
   return Status::OK();
 }
 
-Status RedisMasterClient::Head(std::string* address, int* port) {
+Status RedisMasterClient::Head(std::string *address, int *port) {
   CHECK(false) << "Not implemented";
   return Status::NotSupported("Not implemented");
 }
-Status RedisMasterClient::Tail(std::string* address, int* port) {
-  CHECK(false) << "Not implemented";
-  return Status::NotSupported("Not implemented");
+Status RedisMasterClient::Tail(std::string *address, int *port) {
+  LOG(INFO) << "Issuing RefreshTail";
+  redisReply *reply = reinterpret_cast<redisReply *>(
+      redisCommand(redis_context_.get(), "MASTER.REFRESH_TAIL"));
+
+  CHECK(reply != nullptr) << "Error from redisCommand(): code "
+                          << redis_context_->err << ", "
+                          << std::string(redis_context_->errstr);
+
+  std::string reply_str(reply->str, reply->len);
+  LOG(INFO) << "RefreshTail result: " << reply_str;
+  freeReplyObject(reply);
+
+  const size_t pos = reply_str.find_first_of(':');
+  CHECK(pos != std::string::npos);
+  *address = reply_str.substr(0, pos);
+  *port = std::atoi(reply_str.substr(pos + 1).data());
+  return Status::OK();
 }

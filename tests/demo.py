@@ -13,8 +13,8 @@ import uuid
 import numpy as np
 
 import redis
-import common
-from common import *
+from .common import *
+from . import common
 
 ack_client = AckClient()
 master_client = MasterClient()
