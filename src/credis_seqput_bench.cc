@@ -1,16 +1,36 @@
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <random>
 #include <thread>
 #include <unordered_set>
 
+#include <unistd.h>
+
 #include <gflags/gflags.h>
 #include "glog/logging.h"
 
 #include "client.h"
-#include "master_client.h"
 #include "redis_master_client.h"
 #include "timer.h"
+
+// Fixed-size keys and values.  Works with wr = 1 currently.
+static const int kKeySize = 25;
+static const int kValueSize = 512;
+
+std::string random_string(size_t length) {
+  auto randchar = []() -> char {
+    const char charset[] =
+        "0123456789"
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            "abcdefghijklmnopqrstuvwxyz";
+    const size_t max_index = (sizeof(charset) - 1);
+    return charset[rand() % max_index];
+  };
+  std::string str(length, 0);
+  std::generate_n(str.begin(), length, randchar);
+  return str;
+}
 
 // Command-line flags
 DEFINE_int32(num_ops, 1000000, "Number of operations to do");
@@ -30,12 +50,7 @@ DEFINE_string(stats_file, "/dev/null", "File to write detailed timing stats");
 // randomization; this is critical in distributed settings (e.g., multiple
 // processes running this same program) to avoid catastrophic failures.
 
-// To launch with 2 servers:
-//
-//   pkill -f redis-server; ./setup.sh 2; make -j;
-//   ./src/credis_seqput_bench 2
-//
-// If "2" is omitted in the above, by default 1 server is used.
+// Alignment for making the diff line up for future adjustment :|
 
 aeEventLoop* loop = aeCreateEventLoop(64);
 int writes_completed = 0;
@@ -67,9 +82,12 @@ void SeqPutCallback(redisAsyncContext*, void*, void*);
 void SeqGetCallback(redisAsyncContext*, void*, void*);
 void AsyncPut(bool);
 void AsyncGet();
+void AsyncNoReply();
 
 // Launch a GET or PUT, depending on "write_ratio".
 void AsyncRandomCommand() {
+  // AsyncNoReply();
+
   static std::uniform_real_distribution<double> unif(0.0, 1.0);
   const double r = unif(re);
   if (r < FLAGS_write_ratio || writes_completed == 0) {
@@ -145,6 +163,18 @@ void AsyncPut(bool is_retry) {
       /*privdata=*/NULL, "MEMBER.PUT %b %b %b", data.data(), data.size(),
       data.data(), data.size(), client_id.data(), client_id.size());
   CHECK(status == REDIS_OK);
+}
+
+void AsyncNoReplyCallback(redisAsyncContext* write_context,  // != ack_context.
+                          void* r, void*) {
+  CHECK(0) << "Should never be called";
+}
+void AsyncNoReply() {
+  const int status =
+      redisAsyncCommand(write_context, /*callback=*/&AsyncNoReplyCallback,
+          /*privdata=*/NULL, "NOREPLY");
+  CHECK(status == REDIS_OK);
+  LOG(INFO) << "Done issuing AsyncNoReply";
 }
 
 // Get(i), for a random i in [0, writes_completed).
@@ -322,7 +352,6 @@ int RetryPutTimer(aeEventLoop* loop, long long /*timer_id*/, void*) {
 
 int main(int argc, char** argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
-  FLAGS_write_ratio = FLAGS_write_ratio;
   std::string write_address = FLAGS_write_address;
   const int write_port = FLAGS_write_port;
   std::string ack_address = FLAGS_ack_address;
