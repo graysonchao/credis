@@ -195,7 +195,7 @@ void AsyncGet() {
   CHECK(status == REDIS_OK);
 }
 
-void SeqGetCallback(redisAsyncContext* /*context*/,
+void SeqGetCallback(redisAsyncContext* ctx/*context*/,
                     void* r,
                     void* /*privdata*/) {
   const redisReply* reply = reinterpret_cast<redisReply*>(r);

@@ -161,10 +161,20 @@ Status RedisClient::Connect(const std::string& address, int port) {
 
 Status RedisClient::ReconnectAckContext(const std::string &address, int port,
                                         redisCallbackFn *callback) {
-  redisAsyncDisconnect(read_context_);
-  redisAsyncDisconnect(ack_subscribe_context_);
-  CHECK(ConnectContext(address, port, &read_context_).ok());
+  if (!read_context_->err) redisAsyncDisconnect(read_context_);
+  if (!ack_subscribe_context_->err) {
+    redisAsyncDisconnect(ack_subscribe_context_);
+  }
   CHECK(ConnectContext(address, port, &ack_subscribe_context_).ok());
+  CHECK(ConnectContext(address, port, &read_context_).ok());
+
+  // Reattach both new contexts to the event loop.
+  // This is needed to avoid missing replies to GET and PUT acks.
+  CHECK(loop_ != nullptr);
+  if (redisAeAttach(loop_, read_context_) != REDIS_OK) {
+    return Status::IOError("could not reattach redis event loop");
+  }
+
   return RegisterAckCallback(callback);
 }
 
@@ -185,9 +195,8 @@ static const std::string kChan = std::to_string(getpid());
 Status RedisClient::RegisterAckCallback(redisCallbackFn *callback) {
   CHECK(loop_ != nullptr);
   if (redisAeAttach(loop_, ack_subscribe_context_) != REDIS_OK) {
-    return Status::IOError("could not attach redis event loop");
+    return Status::IOError("could not reattach redis event loop");
   }
-
   LOG(INFO) << getpid() << " subscribing to chan " << kChan;
   const int status = redisAsyncCommand(ack_subscribe_context_, callback,
                                        /*privdata=*/NULL, "SUBSCRIBE %b",
