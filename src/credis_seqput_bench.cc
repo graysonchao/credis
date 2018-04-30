@@ -190,8 +190,14 @@ void AsyncGet() {
   reads_timer.TimeOpBegin();
   // LOG(INFO) << "GET " << query;
   const int status = redisAsyncCommand(
-      read_context, reinterpret_cast<redisCallbackFn*>(&SeqGetCallback),
+      client.read_context(), reinterpret_cast<redisCallbackFn*>(&SeqGetCallback),
       /*privdata=*/NULL, "GET %b", query.data(), query.size());
+  while (status != REDIS_OK) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    const int status = redisAsyncCommand(
+      client.read_context(), reinterpret_cast<redisCallbackFn*>(&SeqGetCallback),
+      /*privdata=*/NULL, "GET %b", query.data(), query.size());
+  }
   CHECK(status == REDIS_OK);
 }
 
